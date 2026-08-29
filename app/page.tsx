@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 
 type RequestType = "link" | "find";
 
-export default function Home() {
+function HomeContent() {
   const [mode, setMode] = useState<RequestType | null>(null);
 
   const [selectedFile, setSelectedFile] =
@@ -675,5 +675,13 @@ export default function Home() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f6f7f9]" />}>
+      <HomeContent />
+    </Suspense>
   );
 }
