@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Product = {
   id: number;
@@ -732,24 +733,42 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8">
-      <div className="mx-auto max-w-3xl">
-        <a
-          href="/admin"
-          className="text-sm font-medium text-gray-500"
-        >
-          ← 관리자 페이지로 돌아가기
-        </a>
+    <main className="min-h-screen bg-gray-50 px-4 py-8 md:p-10">
+      <div className="mx-auto max-w-4xl">
 
-        <h1 className="mt-6 text-3xl font-bold text-gray-900">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            K-Bridge 관리자
+          </h1>
+
+          <p className="mt-2 text-sm text-gray-500">
+            요청, 채팅, 상품을 관리할 수 있습니다.
+          </p >
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            href="/admin"
+            className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-center font-semibold text-gray-900"
+          >
+            📦 요청 관리
+          </Link>
+
+          <Link
+            href="/admin/products"
+            className="rounded-xl bg-black px-4 py-3 text-center font-semibold text-white"
+          >
+            🛍 상품 관리
+          </Link>
+        </div>
+
+        <h1 className="mt-10 text-2xl font-bold text-gray-900">
           추천 상품 관리
         </h1>
 
         <p className="mt-2 text-gray-500">
-          추천 상품을 추가하거나
-          숨기고 삭제할 수
-          있습니다.
-        </p>
+          추천 상품을 추가하거나 수정, 숨김, 삭제할 수 있습니다.
+        </p >
 
         <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900">
@@ -1021,7 +1040,7 @@ export default function AdminProductsPage() {
                 수정 취소
               </button>
             )}
-            
+
           </div>
         </div>
 

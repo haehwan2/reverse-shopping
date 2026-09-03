@@ -26,6 +26,138 @@ function HomeContent() {
   const [message, setMessage] =
     useState("");
 
+  const [aiLoading, setAiLoading] = useState(false);
+
+  async function handleAiRecognition() {
+    if (!selectedFile) {
+      setMessage("请先上传商品图片。");
+      return;
+    }
+
+    try {
+      setAiLoading(true);
+      setMessage("");
+      setAiResult(null);
+
+      const formData = new FormData();
+      formData.append("image", selectedFile);
+
+      const response = await fetch(
+        "/api/product-recognition",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "AI识别失败"
+        );
+      }
+
+      setAiResult(data.result);
+
+      const result = data.result;
+
+      const aiNote = [
+        result.brand
+          ? `品牌：${result.brand}`
+          : "",
+        result.productName
+          ? `商品名：${result.productName}`
+          : "",
+        result.category
+          ? `类别：${result.category}`
+          : "",
+        result.variant
+          ? `特征：${result.variant}`
+          : "",
+        result.searchKeywords?.length
+          ? `搜索关键词：${result.searchKeywords.join("、")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      setRequestNote(aiNote);
+
+    } catch (error) {
+      console.error(error);
+      setMessage(
+        "AI识别失败，请稍后再试。"
+      );
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  const [aiResult, setAiResult] = useState<{
+    brand: string;
+    productName: string;
+    category: string;
+    variant: string;
+    visibleText: string[];
+    searchKeywords: string[];
+    confidence: number;
+    reason: string;
+  } | null>(null);
+
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const [searchResult, setSearchResult] = useState("");
+
+  const [searchProducts, setSearchProducts] = useState<
+    {
+      title: string;
+      url: string;
+    }[]
+  >([]);
+
+  async function handleProductSearch() {
+    if (!aiResult?.searchKeywords?.length) {
+      setMessage("没有可用的搜索关键词。");
+      return;
+    }
+
+    try {
+      setSearchLoading(true);
+      setMessage("");
+      setSearchResult("");
+      setSearchProducts([]);
+
+      const keyword = aiResult.searchKeywords[0];
+
+      const response = await fetch("/api/product-search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          keyword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "商品搜索失败"
+        );
+      }
+
+      setSearchResult(data.result || "");
+      setSearchProducts(data.products || []);
+    } catch (error) {
+      console.error(error);
+      setMessage("商品搜索失败，请稍后再试。");
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -265,7 +397,7 @@ function HomeContent() {
         {/* Beta */}
         <div className="mb-7 flex items-center justify-between">
           <div className="text-lg font-bold tracking-tight text-gray-950">
-            K-Bridge
+            CK-Bridge
           </div>
 
           <div className="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-600">
@@ -514,7 +646,152 @@ function HomeContent() {
                       className="mt-3 text-sm font-medium text-red-500"
                     >
                       删除图片
+
                     </button>
+                  )}
+
+                  {mode === "find" && selectedFile && (
+                    <button
+                      type="button"
+                      onClick={handleAiRecognition}
+                      disabled={aiLoading}
+                      className="mt-3 w-full rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.99] disabled:opacity-50"
+                    >
+                      {aiLoading
+                        ? "AI正在识别..."
+                        : "✨ AI识别商品"}
+                    </button>
+                  )}
+
+                  {aiResult && (
+                    <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-bold text-gray-950">
+                          ✨ AI识别结果
+                        </div>
+
+                        <div className="text-xs font-medium text-orange-600">
+                          可信度 {aiResult.confidence}%
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2 text-sm text-gray-700">
+                        {aiResult.brand && (
+                          <p>
+                            <span className="font-semibold text-gray-900">
+                              品牌：
+                            </span>
+                            {aiResult.brand}
+                          </p >
+                        )}
+
+                        {aiResult.productName && (
+                          <p>
+                            <span className="font-semibold text-gray-900">
+                              商品名：
+                            </span>
+                            {aiResult.productName}
+                          </p >
+                        )}
+
+                        {aiResult.category && (
+                          <p>
+                            <span className="font-semibold text-gray-900">
+                              类别：
+                            </span>
+                            {aiResult.category}
+                          </p >
+                        )}
+
+                        {aiResult.variant && (
+                          <p>
+                            <span className="font-semibold text-gray-900">
+                              特征：
+                            </span>
+                            {aiResult.variant}
+                          </p >
+                        )}
+                      </div>
+
+                      {aiResult.searchKeywords?.length > 0 && (
+                        <div className="mt-4">
+                          <p className="text-xs font-semibold text-gray-700">
+                            推荐搜索词
+                          </p >
+
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {aiResult.searchKeywords.map((keyword) => (
+                              <span
+                                key={keyword}
+                                className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {aiResult.searchKeywords?.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleProductSearch}
+                          disabled={searchLoading}
+                          className="mt-4 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.99] disabled:opacity-50"
+                        >
+                          {searchLoading
+                            ? "AI正在搜索韩国商品..."
+                            : "🔍 AI搜索韩国商品"}
+                        </button>
+                      )}
+
+                      {searchResult && (
+                        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+                          <p className="text-sm font-bold text-gray-950">
+                            🔍 AI搜索结果
+                          </p >
+
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                            {searchResult}
+                          </p >
+                        </div>
+                      )}
+
+                      {searchProducts.length > 0 && (
+                        <div className="mt-3 space-y-3">
+                          {searchProducts.map((product, index) => (
+                            <div
+                              key={`${product.url}-${index}`}
+                              className="rounded-xl border border-gray-200 bg-white p-4"
+                            >
+                              <p className="text-sm font-bold leading-6 text-gray-950">
+                                {product.title || `韩国商品 ${index + 1}`}
+                              </p >
+
+                              <a
+                                href="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-4 flex w-full items-center justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
+                              >
+                                查看商品 →
+                              </a >
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {searchResult && searchProducts.length === 0 && (
+                        <div className="mt-3 rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-500">
+                          暂时没有找到可以确认的商品链接。
+                          <br />
+                          可以根据上面的识别结果提交查询。
+                        </div>
+                      )}
+
+                      <p className="mt-4 text-xs leading-5 text-gray-500">
+                        {aiResult.reason}
+                      </p >
+                    </div>
                   )}
                 </div>
               ) : (
