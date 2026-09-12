@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -11,35 +14,93 @@ type Product = {
   product_url: string | null;
   seller_name: string | null;
   price_krw: number | null;
+  price_adjustment_cny: number | null;
+  list_price_cny: number | null;
   description: string | null;
 };
 
 export default function ProductsPage() {
   const router = useRouter();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [
+    products,
+    setProducts,
+  ] =
+    useState<Product[]>(
+      []
+    );
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
+
+  const [
+    error,
+    setError,
+  ] =
+    useState("");
+
+  const [
+    exchangeRate,
+    setExchangeRate,
+  ] =
+    useState<number | null>(
+      null
+    );
 
   useEffect(() => {
     async function loadProducts() {
-      const { data, error } = await supabase
-        .from("recommended_products")
-        .select(
-          "id, name, image_url, product_url, seller_name, price_krw, description"
-        )
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "recommended_products"
+          )
+          .select(
+            `
+              id,
+              name,
+              image_url,
+              product_url,
+              seller_name,
+              price_krw,
+              price_adjustment_cny,
+              list_price_cny,
+              description
+            `
+          )
+          .eq(
+            "is_active",
+            true
+          )
+          .order(
+            "sort_order",
+            {
+              ascending: true,
+            }
+          );
 
       if (error) {
-        console.error(error);
-        setError("商品加载失败，请稍后再试。");
+        console.error(
+          error
+        );
+
+        setError(
+          "商品加载失败，请稍后再试。"
+        );
       } else {
-        setProducts(data ?? []);
+        setProducts(
+          data ?? []
+        );
       }
 
-      setLoading(false);
+      setLoading(
+        false
+      );
     }
 
     loadProducts();
@@ -48,25 +109,116 @@ export default function ProductsPage() {
   useEffect(() => {
     async function loadExchangeRate() {
       try {
-        const response = await fetch("/api/exchange-rate");
+        const response =
+          await fetch(
+            "/api/exchange-rate"
+          );
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch exchange rate");
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            "Failed to fetch exchange rate"
+          );
         }
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
-        setExchangeRate(data.rate);
+        setExchangeRate(
+          data.rate
+        );
       } catch (error) {
-        console.error("Exchange rate load error:", error);
+        console.error(
+          "Exchange rate load error:",
+          error
+        );
       }
     }
 
     loadExchangeRate();
   }, []);
 
-  function selectProduct(product: Product) {
-    router.push(`/products/${product.id}`);
+  function selectProduct(
+    product: Product
+  ) {
+    router.push(
+      `/products/${product.id}`
+    );
+  }
+
+  function getPriceInfo(
+    product: Product
+  ) {
+    if (
+      product.price_krw ===
+      null ||
+      exchangeRate === null
+    ) {
+      return {
+        salePriceCny:
+          null,
+        listPriceCny:
+          null,
+        discountPercent:
+          null,
+      };
+    }
+
+    const basePriceCny =
+      Math.round(
+        product.price_krw *
+        exchangeRate
+      );
+
+    const adjustment =
+      product.price_adjustment_cny !==
+        null &&
+        product.price_adjustment_cny !==
+        undefined
+        ? Number(
+          product.price_adjustment_cny
+        )
+        : 0;
+
+    const salePriceCny =
+      Math.max(
+        0,
+        Math.round(
+          basePriceCny +
+          adjustment
+        )
+      );
+
+    const listPriceCny =
+      product.list_price_cny !==
+        null &&
+        product.list_price_cny !==
+        undefined
+        ? Number(
+          product.list_price_cny
+        )
+        : null;
+
+    const discountPercent =
+      listPriceCny !==
+        null &&
+        listPriceCny >
+        salePriceCny &&
+        listPriceCny > 0
+        ? Math.round(
+          ((listPriceCny -
+            salePriceCny) /
+            listPriceCny) *
+          100
+        )
+        : null;
+
+    return {
+      salePriceCny,
+      listPriceCny,
+      discountPercent,
+    };
   }
 
   return (
@@ -77,7 +229,11 @@ export default function ProductsPage() {
         <div className="flex items-center justify-between">
           <button
             type="button"
-            onClick={() => router.push("/")}
+            onClick={() =>
+              router.push(
+                "/"
+              )
+            }
             className="text-sm font-medium text-gray-500"
           >
             ← 首页
@@ -106,7 +262,9 @@ export default function ProductsPage() {
         {/* Guide */}
         <section className="mt-6 rounded-2xl bg-white p-4 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
           <div className="flex items-start gap-3">
-            <div className="text-xl">💡</div>
+            <div className="text-xl">
+              💡
+            </div>
 
             <div>
               <p className="text-sm font-semibold text-gray-900">
@@ -139,107 +297,191 @@ export default function ProductsPage() {
         )}
 
         {/* Empty */}
-        {!loading && !error && products.length === 0 && (
-          <div className="mt-8 rounded-3xl bg-white px-5 py-10 text-center shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
-            <div className="text-3xl">🛍️</div>
+        {!loading &&
+          !error &&
+          products.length ===
+          0 && (
+            <div className="mt-8 rounded-3xl bg-white px-5 py-10 text-center shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
 
-            <p className="mt-3 font-semibold text-gray-900">
-              暂时没有推荐商品
-            </p >
+              <div className="text-3xl">
+                🛍️
+              </div>
 
-            <p className="mt-1 text-sm text-gray-400">
-              稍后再来看看吧。
-            </p >
-          </div>
-        )}
+              <p className="mt-3 font-semibold text-gray-900">
+                暂时没有推荐商品
+              </p >
+
+              <p className="mt-1 text-sm text-gray-400">
+                稍后再来看看吧。
+              </p >
+
+            </div>
+          )}
 
         {/* Products */}
-        {!loading && !error && products.length > 0 && (
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            {products.map((product) => (
-              <button
-                key={product.id}
-                type="button"
-                onClick={() => selectProduct(product)}
-                className="overflow-hidden rounded-2xl bg-white text-left shadow-[0_2px_12px_rgba(0,0,0,0.05)] transition active:scale-[0.99] disabled:cursor-default"
-              >
-                {/* Image */}
-                <div className="aspect-square w-full overflow-hidden bg-gray-100">
-                  {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <div className="text-center">
-                        <div className="text-2xl">📦</div>
-                        <p className="mt-1 text-xs text-gray-400">
-                          暂无图片
-                        </p >
+        {!loading &&
+          !error &&
+          products.length >
+          0 && (
+            <div className="mt-6 grid grid-cols-2 gap-3">
+
+              {products.map(
+                (product) => {
+                  const {
+                    salePriceCny,
+                    listPriceCny,
+                    discountPercent,
+                  } =
+                    getPriceInfo(
+                      product
+                    );
+
+                  return (
+                    <button
+                      key={
+                        product.id
+                      }
+                      type="button"
+                      onClick={() =>
+                        selectProduct(
+                          product
+                        )
+                      }
+                      className="overflow-hidden rounded-2xl bg-white text-left shadow-[0_2px_12px_rgba(0,0,0,0.05)] transition active:scale-[0.99] disabled:cursor-default"
+                    >
+
+                      {/* Image */}
+                      <div className="aspect-square w-full overflow-hidden bg-gray-100">
+
+                        {product.image_url ? (
+                          <img
+                            src={
+                              product.image_url
+                            }
+                            alt={
+                              product.name
+                            }
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <div className="text-center">
+
+                              <div className="text-2xl">
+                                📦
+                              </div>
+
+                              <p className="mt-1 text-xs text-gray-400">
+                                暂无图片
+                              </p >
+
+                            </div>
+                          </div>
+                        )}
+
                       </div>
-                    </div>
-                  )}
-                </div>
 
-                {/* Info */}
-                <div className="p-3.5">
-                  {product.seller_name && (
-                    <p className="truncate text-[11px] font-medium text-gray-400">
-                      {product.seller_name}
-                    </p >
-                  )}
+                      {/* Info */}
+                      <div className="p-3.5">
 
-                  <h2 className="mt-1 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-gray-900">
-                    {product.name}
-                  </h2>
+                        {product.seller_name && (
+                          <p className="truncate text-[11px] font-medium text-gray-400">
+                            {
+                              product.seller_name
+                            }
+                          </p >
+                        )}
 
-                  {product.price_krw !== null && (
-                    <div className="mt-2">
-                      {exchangeRate !== null && (
-                        <p className="text-base font-bold tracking-tight text-gray-950">
-                          约 ¥
-                          {Math.round(product.price_krw * exchangeRate).toLocaleString()}
-                        </p >
-                      )}
+                        <h2 className="mt-1 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-gray-900">
+                          {
+                            product.name
+                          }
+                        </h2>
 
-                      <p className="mt-0.5 text-[11px] text-gray-500">
-                        ₩{product.price_krw.toLocaleString()} 韩国售价
-                      </p >
+                        {product.price_krw !==
+                          null && (
+                            <div className="mt-2">
 
-                      {exchangeRate !== null && (
-                        <p className="mt-0.5 text-[10px] text-gray-400">
-                          按当前汇率估算
-                        </p >
-                      )}
-                    </div>
-                  )}
+                              {salePriceCny !==
+                                null && (
+                                  <>
+                                    <div className="flex flex-wrap items-center gap-1.5">
 
-                  {product.description && (
-                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-400">
-                      {product.description}
-                    </p >
-                  )}
+                                      <p className="text-base font-bold tracking-tight text-gray-950">
+                                        ¥
+                                        {salePriceCny.toLocaleString()}
+                                      </p >
 
-                  {product.product_url ? (
-                    <div className="mt-3 border-t border-gray-100 pt-3">
-                      <p className="text-xs font-semibold text-gray-700">
-                        查看商品详情 →
-                      </p >
-                    </div>
-                  ) : (
-                    <div className="mt-3 border-t border-gray-100 pt-3">
-                      <p className="text-xs text-gray-300">
-                        暂不可申请
-                      </p >
-                    </div>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+                                      {discountPercent !==
+                                        null && (
+                                          <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                            {
+                                              discountPercent
+                                            }
+                                            % OFF
+                                          </span>
+                                        )}
+
+                                    </div>
+
+                                    {listPriceCny !==
+                                      null &&
+                                      listPriceCny >
+                                      salePriceCny && (
+                                        <p className="mt-0.5 text-[11px] text-gray-400 line-through">
+                                          ¥
+                                          {listPriceCny.toLocaleString()}
+                                        </p >
+                                      )}
+                                  </>
+                                )}
+
+                              <p className="mt-0.5 text-[11px] text-gray-500">
+                                ₩
+                                {product.price_krw.toLocaleString()}{" "}
+                                韩国售价
+                              </p >
+
+                              {exchangeRate !==
+                                null && (
+                                  <p className="mt-0.5 text-[10px] text-gray-400">
+                                    按当前汇率自动换算
+                                  </p >
+                                )}
+
+                            </div>
+                          )}
+
+                        {product.description && (
+                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-400">
+                            {
+                              product.description
+                            }
+                          </p >
+                        )}
+
+                        {product.product_url ? (
+                          <div className="mt-3 border-t border-gray-100 pt-3">
+                            <p className="text-xs font-semibold text-gray-700">
+                              查看商品详情 →
+                            </p >
+                          </div>
+                        ) : (
+                          <div className="mt-3 border-t border-gray-100 pt-3">
+                            <p className="text-xs text-gray-300">
+                              暂不可申请
+                            </p >
+                          </div>
+                        )}
+
+                      </div>
+                    </button>
+                  );
+                }
+              )}
+
+            </div>
+          )}
 
         {/* Footer */}
         <div className="mt-8 text-center">
@@ -247,6 +489,7 @@ export default function ProductsPage() {
             🧪 测试版暂不支持实际付款和购买
           </p >
         </div>
+
       </div>
     </main>
   );

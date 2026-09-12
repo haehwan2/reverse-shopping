@@ -16,6 +16,8 @@ type Product = {
   product_url: string | null;
   seller_name: string | null;
   price_krw: number | null;
+  price_adjustment_cny: number | null;
+  list_price_cny: number | null;
   description: string | null;
   is_active: boolean;
   sort_order: number;
@@ -35,7 +37,10 @@ function createEmptyOptionGroup(): OptionGroupInput {
 }
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(
+    []
+  );
+
   const [loading, setLoading] = useState(true);
 
   const [name, setName] = useState("");
@@ -43,17 +48,29 @@ export default function AdminProductsPage() {
   const [productUrl, setProductUrl] = useState("");
   const [sellerName, setSellerName] = useState("");
   const [priceKrw, setPriceKrw] = useState("");
-  const [description, setDescription] = useState("");
+  const [priceAdjustmentCny, setPriceAdjustmentCny] =
+    useState("0");
+  const [listPriceCny, setListPriceCny] =
+    useState("");
+  const [exchangeRate, setExchangeRate] =
+    useState<number | null>(null);
+
+  const [description, setDescription] =
+    useState("");
 
   const [optionGroups, setOptionGroups] = useState<
     OptionGroupInput[]
   >([createEmptyOptionGroup()]);
 
-  const [editingProductId, setEditingProductId] =
-    useState<number | null>(null);
+  const [
+    editingProductId,
+    setEditingProductId,
+  ] = useState<number | null>(null);
 
-  const [existingDetailImages, setExistingDetailImages] =
-    useState<string[]>([]);
+  const [
+    existingDetailImages,
+    setExistingDetailImages,
+  ] = useState<string[]>([]);
 
   // 대표 이미지
   const [selectedImage, setSelectedImage] =
@@ -62,7 +79,7 @@ export default function AdminProductsPage() {
   const [imagePreview, setImagePreview] =
     useState("");
 
-  // 상세 이미지
+  // 새로 추가하는 상세 이미지
   const [detailImages, setDetailImages] =
     useState<File[]>([]);
 
@@ -104,6 +121,96 @@ export default function AdminProductsPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    async function loadExchangeRate() {
+      try {
+        const response = await fetch(
+          "/api/exchange-rate"
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to fetch exchange rate"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        setExchangeRate(
+          Number(data.rate)
+        );
+      } catch (error) {
+        console.error(
+          "Exchange rate load error:",
+          error
+        );
+
+        setExchangeRate(null);
+      }
+    }
+
+    loadExchangeRate();
+  }, []);
+
+  const parsedPriceKrw =
+    priceKrw === ""
+      ? null
+      : Number(priceKrw);
+
+  const parsedAdjustment =
+    priceAdjustmentCny === ""
+      ? 0
+      : Number(priceAdjustmentCny);
+
+  const convertedPriceCny =
+    exchangeRate !== null &&
+      parsedPriceKrw !== null &&
+      Number.isFinite(parsedPriceKrw)
+      ? Math.round(
+        parsedPriceKrw *
+        exchangeRate
+      )
+      : null;
+
+  const salePriceCny =
+    convertedPriceCny !== null &&
+      Number.isFinite(parsedAdjustment)
+      ? Math.max(
+        0,
+        convertedPriceCny +
+        parsedAdjustment
+      )
+      : null;
+
+  const parsedListPrice =
+    listPriceCny === ""
+      ? null
+      : Number(listPriceCny);
+
+  const discountPercent =
+    salePriceCny !== null &&
+      parsedListPrice !== null &&
+      Number.isFinite(parsedListPrice) &&
+      parsedListPrice >
+      salePriceCny &&
+      parsedListPrice > 0
+      ? Math.round(
+        ((parsedListPrice -
+          salePriceCny) /
+          parsedListPrice) *
+        100
+      )
+      : null;
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  // =========================
+  // 옵션
+  // =========================
 
   function addOptionGroup() {
     setOptionGroups((prev) => [
@@ -147,19 +254,97 @@ export default function AdminProductsPage() {
 
   function buildOptions(): ProductOption[] {
     return optionGroups
-      .map((group) => ({
-        name: group.name.trim(),
+      .map((group) => {
+        const values = Array.from(
+          new Set(
+            group.valuesText
+              .split(",")
+              .map((value) =>
+                value.trim()
+              )
+              .filter(Boolean)
+          )
+        );
 
-        values: group.valuesText
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-      }))
+        return {
+          name: group.name.trim(),
+          values,
+        };
+      })
       .filter(
         (group) =>
           group.name.length > 0 &&
           group.values.length > 0
       );
+  }
+
+  function validateOptions() {
+    const usedNames =
+      new Set<string>();
+
+    for (const group of optionGroups) {
+      const optionName =
+        group.name.trim();
+
+      const optionValues =
+        group.valuesText
+          .split(",")
+          .map((value) =>
+            value.trim()
+          )
+          .filter(Boolean);
+
+      const hasName =
+        optionName.length > 0;
+
+      const hasValues =
+        optionValues.length > 0;
+
+      // 아무것도 입력하지 않은 기본 옵션 칸은 허용
+      if (!hasName && !hasValues) {
+        continue;
+      }
+
+      // 옵션 종류만 입력
+      if (hasName && !hasValues) {
+        alert(
+          `"${optionName}" 옵션의 선택지를 입력해주세요.\n\n예:\n옵션 종류: 颜色\n선택지: 红色, 蓝色, 黄色`
+        );
+
+        return false;
+      }
+
+      // 선택지만 입력
+      if (!hasName && hasValues) {
+        alert(
+          "선택지를 입력했다면 옵션 종류도 입력해주세요.\n\n예:\n옵션 종류: 颜色\n선택지: 红色, 蓝色, 黄色"
+        );
+
+        return false;
+      }
+
+      const normalizedName =
+        optionName.toLowerCase();
+
+      // 같은 옵션 종류를 여러 개 만든 경우
+      if (
+        usedNames.has(
+          normalizedName
+        )
+      ) {
+        alert(
+          `"${optionName}" 옵션 종류가 중복되어 있습니다.\n\n같은 종류의 선택지는 하나의 칸에 쉼표(,)로 구분해서 입력해주세요.`
+        );
+
+        return false;
+      }
+
+      usedNames.add(
+        normalizedName
+      );
+    }
+
+    return true;
   }
 
   function resetOptionGroups() {
@@ -168,16 +353,48 @@ export default function AdminProductsPage() {
     ]);
   }
 
-  function startEdit(product: Product) {
-    setEditingProductId(product.id);
+  // =========================
+  // 수정 시작
+  // =========================
 
-    setName(product.name ?? "");
-    setProductUrl(product.product_url ?? "");
-    setSellerName(product.seller_name ?? "");
+  function startEdit(product: Product) {
+    setEditingProductId(
+      product.id
+    );
+
+    setName(
+      product.name ?? ""
+    );
+
+    setProductUrl(
+      product.product_url ?? ""
+    );
+
+    setSellerName(
+      product.seller_name ?? ""
+    );
 
     setPriceKrw(
       product.price_krw !== null
         ? String(product.price_krw)
+        : ""
+    );
+
+    setPriceAdjustmentCny(
+      product.price_adjustment_cny !== null &&
+        product.price_adjustment_cny !== undefined
+        ? String(
+          product.price_adjustment_cny
+        )
+        : "0"
+    );
+
+    setListPriceCny(
+      product.list_price_cny !== null &&
+        product.list_price_cny !== undefined
+        ? String(
+          product.list_price_cny
+        )
         : ""
     );
 
@@ -188,11 +405,16 @@ export default function AdminProductsPage() {
     setOptionGroups(
       product.options &&
         product.options.length > 0
-        ? product.options.map((group) => ({
-          name: group.name,
-          valuesText:
-            group.values.join(", "),
-        }))
+        ? product.options.map(
+          (group) => ({
+            name: group.name,
+
+            valuesText:
+              group.values.join(
+                ", "
+              ),
+          })
+        )
         : [
           createEmptyOptionGroup(),
         ]
@@ -221,9 +443,44 @@ export default function AdminProductsPage() {
     });
   }
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  function cancelEdit() {
+    setEditingProductId(null);
+
+    setName("");
+    setImageUrl("");
+    setProductUrl("");
+    setSellerName("");
+    setPriceKrw("");
+    setPriceAdjustmentCny("0");
+    setListPriceCny("");
+    setDescription("");
+
+    resetOptionGroups();
+
+    setSelectedImage(null);
+
+    if (
+      imagePreview.startsWith(
+        "blob:"
+      )
+    ) {
+      URL.revokeObjectURL(
+        imagePreview
+      );
+    }
+
+    setImagePreview("");
+
+    setExistingDetailImages(
+      []
+    );
+
+    clearDetailImages();
+  }
+
+  // =========================
+  // 대표 이미지
+  // =========================
 
   function handleImageChange(
     e: React.ChangeEvent<HTMLInputElement>
@@ -245,8 +502,6 @@ export default function AdminProductsPage() {
       return;
     }
 
-    setSelectedImage(file);
-
     if (
       imagePreview &&
       imagePreview.startsWith(
@@ -258,30 +513,13 @@ export default function AdminProductsPage() {
       );
     }
 
+    setSelectedImage(file);
+
     setImagePreview(
       URL.createObjectURL(file)
     );
-  }
 
-  function cancelEdit() {
-    setEditingProductId(null);
-
-    setName("");
-    setImageUrl("");
-    setProductUrl("");
-    setSellerName("");
-    setPriceKrw("");
-    setDescription("");
-
-    resetOptionGroups();
-
-    setSelectedImage(null);
-    setImagePreview("");
-
-    setExistingDetailImages([]);
-
-    setDetailImages([]);
-    setDetailPreviews([]);
+    e.target.value = "";
   }
 
   function removeSelectedImage() {
@@ -302,6 +540,10 @@ export default function AdminProductsPage() {
     setImageUrl("");
   }
 
+  // =========================
+  // 상세 이미지
+  // =========================
+
   function handleDetailImagesChange(
     e: React.ChangeEvent<HTMLInputElement>
   ) {
@@ -320,14 +562,17 @@ export default function AdminProductsPage() {
         )
       );
 
-    if (
+    const totalCount =
+      existingDetailImages.length +
       detailImages.length +
-      imageFiles.length >
-      8
-    ) {
+      imageFiles.length;
+
+    if (totalCount > 8) {
       alert(
         "상세 이미지는 최대 8장까지 등록할 수 있습니다."
       );
+
+      e.target.value = "";
 
       return;
     }
@@ -353,26 +598,28 @@ export default function AdminProductsPage() {
   function removeDetailImage(
     index: number
   ) {
-    setDetailPreviews((prev) => {
-      const target =
-        prev[index];
+    setDetailPreviews(
+      (prev) => {
+        const target =
+          prev[index];
 
-      if (
-        target &&
-        target.startsWith(
-          "blob:"
-        )
-      ) {
-        URL.revokeObjectURL(
-          target
+        if (
+          target &&
+          target.startsWith(
+            "blob:"
+          )
+        ) {
+          URL.revokeObjectURL(
+            target
+          );
+        }
+
+        return prev.filter(
+          (_, i) =>
+            i !== index
         );
       }
-
-      return prev.filter(
-        (_, i) =>
-          i !== index
-      );
-    });
+    );
 
     setDetailImages((prev) =>
       prev.filter(
@@ -413,6 +660,10 @@ export default function AdminProductsPage() {
     setDetailPreviews([]);
   }
 
+  // =========================
+  // URL 처리
+  // =========================
+
   function getExternalUrl(
     url: string
   ) {
@@ -433,6 +684,10 @@ export default function AdminProductsPage() {
     return `https://${trimmed}`;
   }
 
+  // =========================
+  // 상품 추가
+  // =========================
+
   async function addProduct() {
     if (!name.trim()) {
       alert(
@@ -450,8 +705,12 @@ export default function AdminProductsPage() {
       return;
     }
 
+    if (!validateOptions()) {
+      return;
+    }
+
     try {
-      // 1. 대표 이미지 + 상세 이미지 업로드
+      // 대표 이미지 + 상세 이미지 업로드
       const formData =
         new FormData();
 
@@ -474,8 +733,10 @@ export default function AdminProductsPage() {
           "/api/admin/product-images",
           {
             method: "POST",
+
             credentials:
               "include",
+
             body: formData,
           }
         );
@@ -513,15 +774,12 @@ export default function AdminProductsPage() {
         return;
       }
 
-      // 첫 번째 이미지 = 대표 이미지
       const coverImageUrl =
         uploadedUrls[0];
 
-      // 두 번째부터 = 상세 이미지
       const detailImageUrls =
         uploadedUrls.slice(1);
 
-      // 2. 상품 DB 저장
       const response =
         await fetch(
           "/api/admin/products",
@@ -555,11 +813,25 @@ export default function AdminProductsPage() {
                 null,
 
               price_krw:
-                priceKrw
-                  ? Number(
+                priceKrw === ""
+                  ? null
+                  : Number(
                     priceKrw
-                  )
-                  : null,
+                  ),
+
+              price_adjustment_cny:
+                priceAdjustmentCny === ""
+                  ? 0
+                  : Number(
+                    priceAdjustmentCny
+                  ),
+
+              list_price_cny:
+                listPriceCny === ""
+                  ? null
+                  : Number(
+                    listPriceCny
+                  ),
 
               description:
                 description.trim() ||
@@ -589,12 +861,13 @@ export default function AdminProductsPage() {
         return;
       }
 
-      // 3. 입력값 초기화
       setName("");
       setImageUrl("");
       setProductUrl("");
       setSellerName("");
       setPriceKrw("");
+      setPriceAdjustmentCny("0");
+      setListPriceCny("");
       setDescription("");
 
       resetOptionGroups();
@@ -616,6 +889,10 @@ export default function AdminProductsPage() {
     }
   }
 
+  // =========================
+  // 상품 수정
+  // =========================
+
   async function updateProduct() {
     if (!editingProductId) {
       return;
@@ -626,6 +903,10 @@ export default function AdminProductsPage() {
         "상품명을 입력해주세요."
       );
 
+      return;
+    }
+
+    if (!validateOptions()) {
       return;
     }
 
@@ -679,8 +960,10 @@ export default function AdminProductsPage() {
             "/api/admin/product-images",
             {
               method: "POST",
+
               credentials:
                 "include",
+
               body: formData,
             }
           );
@@ -772,6 +1055,20 @@ export default function AdminProductsPage() {
                     priceKrw
                   ),
 
+              price_adjustment_cny:
+                priceAdjustmentCny === ""
+                  ? 0
+                  : Number(
+                    priceAdjustmentCny
+                  ),
+
+              list_price_cny:
+                listPriceCny === ""
+                  ? null
+                  : Number(
+                    listPriceCny
+                  ),
+
               description:
                 description.trim() ||
                 null,
@@ -800,13 +1097,17 @@ export default function AdminProductsPage() {
         "상품이 수정되었습니다."
       );
 
-      setEditingProductId(null);
+      setEditingProductId(
+        null
+      );
 
       setName("");
       setImageUrl("");
       setProductUrl("");
       setSellerName("");
       setPriceKrw("");
+      setPriceAdjustmentCny("0");
+      setListPriceCny("");
       setDescription("");
 
       resetOptionGroups();
@@ -818,8 +1119,7 @@ export default function AdminProductsPage() {
         []
       );
 
-      setDetailImages([]);
-      setDetailPreviews([]);
+      clearDetailImages();
 
       await loadProducts();
     } catch (error) {
@@ -830,6 +1130,10 @@ export default function AdminProductsPage() {
       );
     }
   }
+
+  // =========================
+  // 상품 노출 / 숨김
+  // =========================
 
   async function toggleActive(
     product: Product
@@ -880,6 +1184,10 @@ export default function AdminProductsPage() {
       );
     }
   }
+
+  // =========================
+  // 상품 삭제
+  // =========================
 
   async function deleteProduct(
     id: number
@@ -941,6 +1249,8 @@ export default function AdminProductsPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 md:p-10">
       <div className="mx-auto max-w-4xl">
+
+        {/* 관리자 헤더 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
             K-Bridge 관리자
@@ -951,6 +1261,7 @@ export default function AdminProductsPage() {
           </p>
         </div>
 
+        {/* 관리자 메뉴 */}
         <div className="grid grid-cols-2 gap-3">
           <Link
             href="/admin"
@@ -975,6 +1286,7 @@ export default function AdminProductsPage() {
           추천 상품을 추가하거나 수정, 숨김, 삭제할 수 있습니다.
         </p>
 
+        {/* 상품 추가 / 수정 */}
         <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900">
             {editingProductId
@@ -983,6 +1295,7 @@ export default function AdminProductsPage() {
           </h2>
 
           <div className="mt-5 space-y-5">
+
             {/* 상품명 */}
             <div>
               <label className="mb-2 block text-sm font-semibold text-gray-700">
@@ -1067,14 +1380,12 @@ export default function AdminProductsPage() {
                       ) => (
                         <div
                           key={
-                            image
+                            `${image}-${index}`
                           }
                           className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
                         >
                           <img
-                            src={
-                              image
-                            }
+                            src={image}
                             alt={`기존 상세 이미지 ${index + 1
                               }`}
                             className="aspect-square w-full object-cover"
@@ -1098,7 +1409,7 @@ export default function AdminProductsPage() {
                 </div>
               )}
 
-            {/* 상세 이미지 */}
+            {/* 새 상세 이미지 */}
             <div>
               <label className="mb-2 block text-sm font-semibold text-gray-700">
                 상세 이미지
@@ -1144,7 +1455,7 @@ export default function AdminProductsPage() {
                       ) => (
                         <div
                           key={
-                            preview
+                            `${preview}-${index}`
                           }
                           className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
                         >
@@ -1221,24 +1532,168 @@ export default function AdminProductsPage() {
             </div>
 
             {/* 가격 */}
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">
-                한국 판매 가격 (KRW)
-              </label>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <h3 className="text-base font-bold text-gray-900">
+                중국 판매 가격 설정
+              </h3>
 
-              <input
-                type="number"
-                value={
-                  priceKrw
-                }
-                onChange={(e) =>
-                  setPriceKrw(
-                    e.target.value
-                  )
-                }
-                placeholder="예: 35000"
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
-              />
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                한국 가격을 현재 환율로 자동 환산한 뒤,
+                가격 조정값을 더하거나 빼서 실제 판매가를 계산합니다.
+              </p >
+
+              <div className="mt-4">
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  한국 판매 가격 (KRW)
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  value={priceKrw}
+                  onChange={(e) =>
+                    setPriceKrw(
+                      e.target.value
+                    )
+                  }
+                  placeholder="예: 35000"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
+                />
+              </div>
+
+              <div className="mt-4 rounded-xl bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-500">
+                    현재 환율
+                  </span>
+
+                  <span className="text-sm font-semibold text-gray-900">
+                    {exchangeRate !== null
+                      ? `₩1 = ¥${exchangeRate.toFixed(
+                        6
+                      )}`
+                      : "불러오는 중..."}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-500">
+                    환율 기준 가격
+                  </span>
+
+                  <span className="text-sm font-semibold text-gray-900">
+                    {convertedPriceCny !== null
+                      ? `¥${convertedPriceCny.toLocaleString()}`
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  가격 조정 (CNY)
+                </label>
+
+                <input
+                  type="number"
+                  step="1"
+                  value={priceAdjustmentCny}
+                  onChange={(e) =>
+                    setPriceAdjustmentCny(
+                      e.target.value
+                    )
+                  }
+                  placeholder="예: 5 또는 -3"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
+                />
+
+                <p className="mt-2 text-xs text-gray-400">
+                  +5를 입력하면 5위안을 더하고,
+                  -3을 입력하면 3위안을 뺍니다.
+                </p >
+              </div>
+
+              <div className="mt-4 rounded-xl bg-black p-4 text-white">
+                <p className="text-xs text-gray-300">
+                  예상 실제 판매가
+                </p >
+
+                <p className="mt-1 text-2xl font-bold">
+                  {salePriceCny !== null
+                    ? `¥${salePriceCny.toLocaleString()}`
+                    : "-"}
+                </p >
+
+                <p className="mt-2 text-xs text-gray-400">
+                  환율이 바뀌면 판매가도 자동으로 다시 계산됩니다.
+                </p >
+              </div>
+
+              <div className="mt-4">
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  중국 정가 (CNY, 선택)
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={listPriceCny}
+                  onChange={(e) =>
+                    setListPriceCny(
+                      e.target.value
+                    )
+                  }
+                  placeholder="예: 199"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
+                />
+
+                <p className="mt-2 text-xs leading-5 text-gray-400">
+                  실제 판매가보다 높은 정가를 입력하면
+                  할인율이 자동 계산됩니다.
+                </p >
+              </div>
+
+              {discountPercent !== null && (
+                <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4">
+                  <p className="text-sm font-semibold text-red-600">
+                    할인 미리보기
+                  </p >
+
+                  <div className="mt-2 flex items-end gap-2">
+                    <span className="text-2xl font-bold text-gray-950">
+                      ¥
+                      {salePriceCny?.toLocaleString()}
+                    </span>
+
+                    <span className="text-sm text-gray-400 line-through">
+                      ¥
+                      {parsedListPrice?.toLocaleString()}
+                    </span>
+
+                    <span className="rounded-full bg-red-500 px-2 py-1 text-xs font-bold text-white">
+                      {discountPercent}% OFF
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {salePriceCny !== null &&
+                parsedListPrice !== null &&
+                parsedListPrice < salePriceCny && (
+                  <p className="mt-3 text-xs font-medium text-orange-600">
+                    정가가 실제 판매가보다 낮습니다.
+                    이 경우 할인 표시는 하지 않습니다.
+                  </p >
+                )}
+
+              {salePriceCny !== null &&
+                parsedListPrice !== null &&
+                parsedListPrice === salePriceCny && (
+                  <p className="mt-3 text-xs text-gray-500">
+                    정가와 판매가가 같아서 할인 표시는 숨겨집니다.
+                  </p >
+                )}
             </div>
 
             {/* 설명 */}
@@ -1262,7 +1717,7 @@ export default function AdminProductsPage() {
               />
             </div>
 
-            {/* 상품 옵션 */}
+            {/* 옵션 */}
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <label className="block text-sm font-semibold text-gray-700">
@@ -1276,14 +1731,26 @@ export default function AdminProductsPage() {
                   }
                   className="shrink-0 text-sm font-semibold text-blue-600"
                 >
-                  + 옵션 그룹 추가
+                  + 옵션 종류 추가
                 </button>
               </div>
 
-              <p className="mb-3 text-xs leading-5 text-gray-400">
-                맛, 색상, 사이즈, 용량 등 상품에 필요한 옵션을 추가하세요.
-                옵션값은 쉼표(,)로 구분합니다.
-              </p>
+              <div className="mb-4 rounded-xl bg-blue-50 p-3">
+                <p className="text-xs font-semibold text-blue-800">
+                  입력 예시
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-blue-700">
+                  옵션 종류: 颜色
+                  <br />
+                  선택지: 红色, 蓝色, 黄色, 紫色, 粉色
+                </p>
+
+                <p className="mt-2 text-xs leading-5 text-blue-600">
+                  빨강, 파랑 등을 각각 옵션 종류로 만들지 말고
+                  하나의 옵션 종류 안에 쉼표로 입력하세요.
+                </p>
+              </div>
 
               <div className="space-y-3">
                 {optionGroups.map(
@@ -1296,8 +1763,8 @@ export default function AdminProductsPage() {
                       className="rounded-xl border border-gray-200 bg-gray-50 p-4"
                     >
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-500">
-                          옵션명
+                        <label className="mb-1 block text-xs font-semibold text-gray-600">
+                          옵션 종류
                         </label>
 
                         <input
@@ -1317,8 +1784,8 @@ export default function AdminProductsPage() {
                       </div>
 
                       <div className="mt-3">
-                        <label className="mb-1 block text-xs font-medium text-gray-500">
-                          옵션값
+                        <label className="mb-1 block text-xs font-semibold text-gray-600">
+                          선택지
                         </label>
 
                         <textarea
@@ -1332,10 +1799,14 @@ export default function AdminProductsPage() {
                               e.target.value
                             )
                           }
-                          placeholder="예: 黑色, 白色, 蓝色"
+                          placeholder="예: 红色, 蓝色, 黄色, 紫色, 粉色"
                           rows={2}
                           className="w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3"
                         />
+
+                        <p className="mt-2 text-xs text-gray-400">
+                          여러 선택지는 쉼표(,)로 구분해주세요.
+                        </p>
                       </div>
 
                       <button
@@ -1347,7 +1818,7 @@ export default function AdminProductsPage() {
                         }
                         className="mt-3 text-xs font-medium text-red-500"
                       >
-                        이 옵션 그룹 삭제
+                        이 옵션 종류 삭제
                       </button>
                     </div>
                   )
@@ -1355,6 +1826,7 @@ export default function AdminProductsPage() {
               </div>
             </div>
 
+            {/* 저장 */}
             <button
               type="button"
               onClick={
@@ -1383,7 +1855,7 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        {/* 현재 추천 상품 */}
+        {/* 현재 상품 */}
         <div className="mt-8">
           <h2 className="text-xl font-bold text-gray-900">
             현재 추천 상품
@@ -1459,7 +1931,8 @@ export default function AdminProductsPage() {
                       </p>
 
                       {product.options &&
-                        product.options.length >
+                        product.options
+                          .length >
                         0 && (
                           <div className="mt-3 space-y-1">
                             {product.options.map(

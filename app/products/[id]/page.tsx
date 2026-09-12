@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
+
 import { supabase } from "@/lib/supabase";
 
 type ProductOption = {
@@ -16,7 +24,11 @@ type Product = {
   detail_images: string[] | null;
   product_url: string | null;
   seller_name: string | null;
+
   price_krw: number | null;
+  price_adjustment_cny: number | null;
+  list_price_cny: number | null;
+
   description: string | null;
   options: ProductOption[] | null;
   estimated_weight_grams: number | null;
@@ -41,7 +53,10 @@ function estimateShippingFee(
 
   return (
     38 +
-    Math.ceil(weightKg - 1) * 12
+    Math.ceil(
+      weightKg - 1
+    ) *
+    12
   );
 }
 
@@ -94,10 +109,16 @@ export default function ProductDetailPage() {
   ] =
     useState("");
 
-  // 옵션별 수량
-  // 예:
-  // "口味::真巧克力": 2
-  // "口味::香蕉": 1
+  /*
+   * 옵션별 수량
+   *
+   * 이제 옵션 이름/값 자체를 key로 사용하지 않고
+   * 화면상의 groupIndex + valueIndex를 사용한다.
+   *
+   * 예:
+   * "0::0" = 첫 번째 옵션의 첫 번째 선택지
+   * "0::1" = 첫 번째 옵션의 두 번째 선택지
+   */
   const [
     optionQuantities,
     setOptionQuantities,
@@ -105,6 +126,10 @@ export default function ProductDetailPage() {
     useState<
       Record<string, number>
     >({});
+
+  // =========================
+  // 상품 불러오기
+  // =========================
 
   useEffect(() => {
     async function loadProduct() {
@@ -126,6 +151,8 @@ export default function ProductDetailPage() {
                 product_url,
                 seller_name,
                 price_krw,
+                price_adjustment_cny,
+                list_price_cny,
                 description,
                 options,
                 estimated_weight_grams
@@ -142,7 +169,9 @@ export default function ProductDetailPage() {
             .single();
 
         if (error) {
-          console.error(error);
+          console.error(
+            error
+          );
 
           setError(
             "商品信息加载失败，请稍后再试。"
@@ -155,17 +184,22 @@ export default function ProductDetailPage() {
           data as Product
         );
 
+        // 상품이 바뀌면 옵션 수량 초기화
         setOptionQuantities(
           {}
         );
       } catch (error) {
-        console.error(error);
+        console.error(
+          error
+        );
 
         setError(
           "商品信息加载失败，请稍后再试。"
         );
       } finally {
-        setLoading(false);
+        setLoading(
+          false
+        );
       }
     }
 
@@ -173,6 +207,10 @@ export default function ProductDetailPage() {
       loadProduct();
     }
   }, [id]);
+
+  // =========================
+  // 환율
+  // =========================
 
   useEffect(() => {
     async function loadExchangeRate() {
@@ -182,7 +220,9 @@ export default function ProductDetailPage() {
             "/api/exchange-rate"
           );
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             "Failed to fetch exchange rate"
           );
@@ -205,6 +245,10 @@ export default function ProductDetailPage() {
     loadExchangeRate();
   }, []);
 
+  // =========================
+  // AI 무게 추정
+  // =========================
+
   useEffect(() => {
     async function estimateWeight() {
       if (!product) {
@@ -213,16 +257,17 @@ export default function ProductDetailPage() {
 
       /*
        * DB에 이미 무게가 있으면
-       * AI를 다시 호출하지 않음
+       * AI를 다시 호출하지 않는다.
        */
       if (
         product.estimated_weight_grams !==
-          null &&
+        null &&
         product.estimated_weight_grams >
-          0
+        0
       ) {
         setEstimatedWeightGrams(
-          product.estimated_weight_grams
+          product
+            .estimated_weight_grams
         );
 
         setWeightReason(
@@ -233,7 +278,7 @@ export default function ProductDetailPage() {
       }
 
       /*
-       * DB에 무게가 없는 경우에만
+       * DB에 무게가 없는 상품만
        * AI 무게 추정
        */
       try {
@@ -241,7 +286,8 @@ export default function ProductDetailPage() {
           await fetch(
             "/api/weight-estimate",
             {
-              method: "POST",
+              method:
+                "POST",
 
               headers: {
                 "Content-Type":
@@ -264,7 +310,9 @@ export default function ProductDetailPage() {
             }
           );
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             "Failed to estimate weight"
           );
@@ -277,7 +325,7 @@ export default function ProductDetailPage() {
           data.success &&
           data.result
             ?.estimatedWeightGrams >
-            0
+          0
         ) {
           const estimatedWeight =
             data.result
@@ -289,10 +337,13 @@ export default function ProductDetailPage() {
 
           setWeightReason(
             data.result
-              .weightReason || ""
+              .weightReason ||
+            ""
           );
 
-          // AI 추정값 DB 저장
+          /*
+           * AI가 계산한 무게를 DB에 저장
+           */
           try {
             const saveResponse =
               await fetch(
@@ -327,7 +378,7 @@ export default function ProductDetailPage() {
               );
             }
           } catch (
-            saveError
+          saveError
           ) {
             console.error(
               "Save estimated weight error:",
@@ -346,38 +397,43 @@ export default function ProductDetailPage() {
     estimateWeight();
   }, [product]);
 
+  // =========================
+  // 옵션 수량
+  // =========================
+
   function getOptionKey(
-    groupName: string,
-    value: string
+    groupIndex: number,
+    valueIndex: number
   ) {
-    return `${groupName}::${value}`;
+    return `${groupIndex}::${valueIndex}`;
   }
 
   function getOptionQuantity(
-    groupName: string,
-    value: string
+    groupIndex: number,
+    valueIndex: number
   ) {
     const key =
       getOptionKey(
-        groupName,
-        value
+        groupIndex,
+        valueIndex
       );
 
     return (
-      optionQuantities[key] ??
-      0
+      optionQuantities[
+      key
+      ] ?? 0
     );
   }
 
   function changeOptionQuantity(
-    groupName: string,
-    value: string,
+    groupIndex: number,
+    valueIndex: number,
     change: number
   ) {
     const key =
       getOptionKey(
-        groupName,
-        value
+        groupIndex,
+        valueIndex
       );
 
     setOptionQuantities(
@@ -398,10 +454,11 @@ export default function ProductDetailPage() {
             0
           );
 
-        // 최대 20개
+        // 전체 최대 20개
         if (
           change > 0 &&
-          currentTotal >= 20
+          currentTotal >=
+          20
         ) {
           return prev;
         }
@@ -409,7 +466,8 @@ export default function ProductDetailPage() {
         const next =
           Math.max(
             0,
-            current + change
+            current +
+            change
           );
 
         return {
@@ -428,23 +486,189 @@ export default function ProductDetailPage() {
         sum,
         quantity
       ) =>
-        sum + quantity,
+        sum +
+        quantity,
       0
     );
+
+  // =========================
+  // 로딩
+  // =========================
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#f6f7f9]">
+        <div className="mx-auto max-w-md px-5 py-10">
+          <p className="text-center text-sm text-gray-400">
+            商品加载中...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // =========================
+  // 오류
+  // =========================
+
+  if (
+    error ||
+    !product
+  ) {
+    return (
+      <main className="min-h-screen bg-[#f6f7f9]">
+        <div className="mx-auto max-w-md px-5 py-10">
+
+          <button
+            type="button"
+            onClick={() =>
+              router.push(
+                "/products"
+              )
+            }
+            className="text-sm font-medium text-gray-500"
+          >
+            ← 返回
+          </button>
+
+          <div className="mt-10 rounded-2xl bg-white p-6 text-center">
+            <p className="text-sm text-red-500">
+              {error ||
+                "找不到该商品。"}
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const detailImages =
+    product.detail_images ??
+    [];
+
+  /*
+   * DB에 과거 잘못 저장된 중복 선택지가 있어도
+   * 고객 화면에서는 자동으로 중복 제거한다.
+   *
+   * 예:
+   * ["浅米色", "浅米色", "黑色"]
+   *
+   * ↓
+   *
+   * ["浅米色", "黑色"]
+   */
+  const optionGroups =
+    (
+      product.options ??
+      []
+    )
+      .map(
+        (group) => ({
+          name:
+            group.name.trim(),
+
+          values:
+            Array.from(
+              new Set(
+                (
+                  group.values ??
+                  []
+                )
+                  .map(
+                    (
+                      value
+                    ) =>
+                      value.trim()
+                  )
+                  .filter(
+                    Boolean
+                  )
+              )
+            ),
+        })
+      )
+      .filter(
+        (group) =>
+          group.name
+            .length >
+          0 &&
+          group.values
+            .length >
+          0
+      );
+
+  // =========================
+  // 중국 판매 가격
+  // =========================
+
+  const basePriceCny =
+    product.price_krw !== null &&
+      exchangeRate !== null
+      ? Math.round(
+        product.price_krw *
+        exchangeRate
+      )
+      : null;
+
+  const priceAdjustmentCny =
+    product.price_adjustment_cny !==
+      null &&
+      product.price_adjustment_cny !==
+      undefined
+      ? Number(
+        product.price_adjustment_cny
+      )
+      : 0;
+
+  const salePriceCny =
+    basePriceCny !== null
+      ? Math.max(
+        0,
+        Math.round(
+          basePriceCny +
+          priceAdjustmentCny
+        )
+      )
+      : null;
+
+  const listPriceCny =
+    product.list_price_cny !==
+      null &&
+      product.list_price_cny !==
+      undefined
+      ? Number(
+        product.list_price_cny
+      )
+      : null;
+
+  const discountPercent =
+    salePriceCny !== null &&
+      listPriceCny !== null &&
+      listPriceCny >
+      salePriceCny &&
+      listPriceCny > 0
+      ? Math.round(
+        ((listPriceCny -
+          salePriceCny) /
+          listPriceCny) *
+        100
+      )
+      : null;
+
+  // =========================
+  // 견적 요청
+  // =========================
 
   function requestQuote() {
     if (!product) {
       return;
     }
 
-    const optionGroups =
-      product.options ?? [];
-
     if (
       optionGroups.length >
-        0 &&
+      0 &&
       totalOptionQuantity ===
-        0
+      0
     ) {
       alert(
         "请至少选择一个商品选项"
@@ -454,11 +678,15 @@ export default function ProductDetailPage() {
     }
 
     const query =
-      new URLSearchParams({
-        mode: "link",
-        productName:
-          product.name,
-      });
+      new URLSearchParams(
+        {
+          mode:
+            "link",
+
+          productName:
+            product.name,
+        }
+      );
 
     if (
       product.product_url
@@ -486,17 +714,24 @@ export default function ProductDetailPage() {
         string[] = [];
 
       optionGroups.forEach(
-        (group) => {
+        (
+          group,
+          groupIndex
+        ) => {
           group.values.forEach(
-            (value) => {
+            (
+              value,
+              valueIndex
+            ) => {
               const quantity =
                 getOptionQuantity(
-                  group.name,
-                  value
+                  groupIndex,
+                  valueIndex
                 );
 
               if (
-                quantity > 0
+                quantity >
+                0
               ) {
                 selectedItems.push(
                   `${group.name}: ${value} × ${quantity}`
@@ -527,61 +762,13 @@ export default function ProductDetailPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-[#f6f7f9]">
-        <div className="mx-auto max-w-md px-5 py-10">
-          <p className="text-center text-sm text-gray-400">
-            商品加载中...
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  if (
-    error ||
-    !product
-  ) {
-    return (
-      <main className="min-h-screen bg-[#f6f7f9]">
-        <div className="mx-auto max-w-md px-5 py-10">
-          <button
-            type="button"
-            onClick={() =>
-              router.push(
-                "/products"
-              )
-            }
-            className="text-sm font-medium text-gray-500"
-          >
-            ← 返回
-          </button>
-
-          <div className="mt-10 rounded-2xl bg-white p-6 text-center">
-            <p className="text-sm text-red-500">
-              {error ||
-                "找不到该商品。"}
-            </p>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  const detailImages =
-    product.detail_images ??
-    [];
-
-  const optionGroups =
-    product.options ?? [];
-
   return (
     <main className="min-h-screen bg-[#f6f7f9] pb-32">
       <div className="mx-auto max-w-md">
 
         {/* 상단 */}
         <div className="flex items-center justify-between px-5 py-5">
+
           <button
             type="button"
             onClick={() =>
@@ -601,6 +788,7 @@ export default function ProductDetailPage() {
 
         {/* 대표 이미지 */}
         <section className="bg-white">
+
           {product.image_url ? (
             <img
               src={
@@ -614,6 +802,7 @@ export default function ProductDetailPage() {
           ) : (
             <div className="flex aspect-square w-full items-center justify-center bg-gray-100">
               <div className="text-center">
+
                 <div className="text-4xl">
                   📦
                 </div>
@@ -621,13 +810,16 @@ export default function ProductDetailPage() {
                 <p className="mt-3 text-sm text-gray-400">
                   暂无商品图片
                 </p>
+
               </div>
             </div>
           )}
+
         </section>
 
         {/* 기본 상품 정보 */}
         <section className="bg-white px-5 pb-6 pt-5">
+
           {product.seller_name && (
             <p className="text-sm font-medium text-gray-400">
               {
@@ -640,256 +832,289 @@ export default function ProductDetailPage() {
             {product.name}
           </h1>
 
-          {product.price_krw !==
-            null && (
+          {product.price_krw !== null && (
             <div className="mt-5">
 
-              {exchangeRate !==
-                null && (
-                <p className="text-2xl font-bold tracking-tight text-gray-950">
-                  约 ¥
-                  {Math.round(
-                    product.price_krw *
-                      exchangeRate
-                  ).toLocaleString()}
-                </p>
+              {salePriceCny !== null && (
+                <>
+                  <div className="flex flex-wrap items-end gap-2">
+
+                    <p className="text-3xl font-bold tracking-tight text-gray-950">
+                      ¥
+                      {salePriceCny.toLocaleString()}
+                    </p >
+
+                    {discountPercent !==
+                      null && (
+                        <span className="mb-1 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white">
+                          {discountPercent}% OFF
+                        </span>
+                      )}
+
+                  </div>
+
+                  {listPriceCny !== null &&
+                    listPriceCny >
+                    salePriceCny && (
+                      <p className="mt-1 text-sm text-gray-400 line-through">
+                        ¥
+                        {listPriceCny.toLocaleString()}
+                      </p >
+                    )}
+                </>
               )}
 
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-gray-500">
                 ₩
                 {product.price_krw.toLocaleString()}{" "}
                 韩国参考售价
-              </p>
+              </p >
 
-              {exchangeRate !==
-                null && (
+              {exchangeRate !== null && (
                 <p className="mt-1 text-xs text-gray-400">
-                  按当前汇率估算 ·
-                  实际价格可能发生变化
-                </p>
+                  按当前汇率自动换算 ·
+                  实际价格可能随汇率变化
+                </p >
               )}
+
             </div>
           )}
 
+          {/* AI 무게 */}
           {estimatedWeightGrams !==
             null &&
             estimatedWeightGrams >
-              0 && (
-            <div className="mt-4 rounded-xl bg-gray-50 p-4">
+            0 && (
+              <div className="mt-4 rounded-xl bg-gray-50 p-4">
 
-              <p className="text-sm text-gray-900">
-                <span className="font-semibold">
-                  ⚖️ AI预估重量：
-                </span>
+                <p className="text-sm text-gray-900">
+                  <span className="font-semibold">
+                    ⚖️ AI预估重量：
+                  </span>
 
-                {estimatedWeightGrams >=
-                1000
-                  ? `约 ${(
+                  {estimatedWeightGrams >=
+                    1000
+                    ? `约 ${(
                       estimatedWeightGrams /
                       1000
                     ).toFixed(
                       1
                     )}kg`
-                  : `约 ${estimatedWeightGrams}g`}
-              </p>
-
-              {weightReason && (
-                <p className="mt-1 text-xs leading-5 text-gray-500">
-                  {weightReason}
+                    : `约 ${estimatedWeightGrams}g`}
                 </p>
-              )}
 
-              <p className="mt-1 text-[11px] text-gray-400">
-                仅为AI估算，实际重量可能不同
-              </p>
-
-              {estimateShippingFee(
-                estimatedWeightGrams
-              ) !== null && (
-                <div className="mt-3 border-t border-gray-200 pt-3">
-                  <p className="text-sm text-gray-900">
-                    <span className="font-semibold">
-                      🚚
-                      预计国际运费：
-                    </span>{" "}
-                    约 ¥
-                    {estimateShippingFee(
-                      estimatedWeightGrams
-                    )}
+                {weightReason && (
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    {
+                      weightReason
+                    }
                   </p>
+                )}
 
-                  <p className="mt-1 text-[11px] text-gray-400">
-                    按参考运费规则估算 ·
-                    实际运费以物流确认结果为准
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+                <p className="mt-1 text-[11px] text-gray-400">
+                  仅为AI估算，实际重量可能不同
+                </p>
+
+                {estimateShippingFee(
+                  estimatedWeightGrams
+                ) !==
+                  null && (
+                    <div className="mt-3 border-t border-gray-200 pt-3">
+
+                      <p className="text-sm text-gray-900">
+                        <span className="font-semibold">
+                          🚚 预计国际运费：
+                        </span>{" "}
+                        约 ¥
+                        {estimateShippingFee(
+                          estimatedWeightGrams
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        按参考运费规则估算 ·
+                        实际运费以物流确认结果为准
+                      </p>
+
+                    </div>
+                  )}
+
+              </div>
+            )}
+
         </section>
 
         {/* 상품 옵션 */}
         {optionGroups.length >
           0 && (
-          <section className="mt-3 bg-white px-5 py-6">
+            <section className="mt-3 bg-white px-5 py-6">
 
-            <h2 className="text-lg font-bold text-gray-950">
-              选择商品选项
-            </h2>
+              <h2 className="text-lg font-bold text-gray-950">
+                选择商品选项
+              </h2>
 
-            <p className="mt-1 text-xs text-gray-400">
-              可以分别选择不同选项的数量
-            </p>
+              <p className="mt-1 text-xs text-gray-400">
+                可以分别选择不同选项的数量
+              </p>
 
-            <div className="mt-5 space-y-7">
+              <div className="mt-5 space-y-7">
 
-              {optionGroups.map(
-                (group) => (
-                  <div
-                    key={
-                      group.name
-                    }
-                  >
-                    <p className="text-sm font-semibold text-gray-900">
-                      {
-                        group.name
-                      }
-                    </p>
+                {optionGroups.map(
+                  (
+                    group,
+                    groupIndex
+                  ) => (
+                    <div
+                      key={`${group.name}-${groupIndex}`}
+                    >
 
-                    <div className="mt-3 space-y-3">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {
+                          group.name
+                        }
+                      </p>
 
-                      {group.values.map(
-                        (value) => {
-                          const quantity =
-                            getOptionQuantity(
-                              group.name,
-                              value
-                            );
+                      <div className="mt-3 space-y-3">
 
-                          return (
-                            <div
-                              key={
-                                value
-                              }
-                              className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
-                                quantity >
-                                0
+                        {group.values.map(
+                          (
+                            value,
+                            valueIndex
+                          ) => {
+                            const quantity =
+                              getOptionQuantity(
+                                groupIndex,
+                                valueIndex
+                              );
+
+                            return (
+                              <div
+                                key={`${groupIndex}-${valueIndex}-${value}`}
+                                className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${quantity >
+                                  0
                                   ? "border-gray-950 bg-gray-50"
                                   : "border-gray-200 bg-white"
-                              }`}
-                            >
-                              <span className="min-w-0 flex-1 pr-3 text-sm font-medium text-gray-900">
-                                {
-                                  value
-                                }
-                              </span>
+                                  }`}
+                              >
 
-                              <div className="flex shrink-0 items-center gap-3">
-
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    changeOptionQuantity(
-                                      group.name,
-                                      value,
-                                      -1
-                                    )
-                                  }
-                                  disabled={
-                                    quantity ===
-                                    0
-                                  }
-                                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-                                >
-                                  −
-                                </button>
-
-                                <span className="min-w-5 text-center text-sm font-bold text-gray-950">
+                                <span className="min-w-0 flex-1 pr-3 text-sm font-medium text-gray-900">
                                   {
-                                    quantity
+                                    value
                                   }
                                 </span>
 
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    changeOptionQuantity(
-                                      group.name,
-                                      value,
-                                      1
-                                    )
-                                  }
-                                  disabled={
-                                    totalOptionQuantity >=
-                                    20
-                                  }
-                                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
-                                >
-                                  +
-                                </button>
+                                <div className="flex shrink-0 items-center gap-3">
 
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      changeOptionQuantity(
+                                        groupIndex,
+                                        valueIndex,
+                                        -1
+                                      )
+                                    }
+                                    disabled={
+                                      quantity ===
+                                      0
+                                    }
+                                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                                  >
+                                    −
+                                  </button>
+
+                                  <span className="min-w-5 text-center text-sm font-bold text-gray-950">
+                                    {
+                                      quantity
+                                    }
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      changeOptionQuantity(
+                                        groupIndex,
+                                        valueIndex,
+                                        1
+                                      )
+                                    }
+                                    disabled={
+                                      totalOptionQuantity >=
+                                      20
+                                    }
+                                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-lg font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-30"
+                                  >
+                                    +
+                                  </button>
+
+                                </div>
                               </div>
-                            </div>
-                          );
-                        }
-                      )}
+                            );
+                          }
+                        )}
 
+                      </div>
                     </div>
-                  </div>
-                )
-              )}
+                  )
+                )}
 
-            </div>
+              </div>
 
-            <div className="mt-5 flex items-center justify-between rounded-2xl bg-gray-950 px-4 py-4 text-white">
-              <span className="text-sm font-medium">
-                合计
-              </span>
+              {/* 총 수량 */}
+              <div className="mt-5 flex items-center justify-between rounded-2xl bg-gray-950 px-4 py-4 text-white">
 
-              <span className="font-bold">
-                {
-                  totalOptionQuantity
-                }{" "}
-                件
-              </span>
-            </div>
+                <span className="text-sm font-medium">
+                  合计
+                </span>
 
-            <p className="mt-2 text-right text-xs text-gray-400">
-              最多可选择 20 件
-            </p>
+                <span className="font-bold">
+                  {
+                    totalOptionQuantity
+                  }{" "}
+                  件
+                </span>
 
-          </section>
-        )}
+              </div>
+
+              <p className="mt-2 text-right text-xs text-gray-400">
+                最多可选择 20 件
+              </p>
+
+            </section>
+          )}
 
         {/* 상세 이미지 */}
         {detailImages.length >
           0 && (
-          <section className="mt-3 bg-white py-6">
+            <section className="mt-3 bg-white py-6">
 
-            <h2 className="px-5 text-lg font-bold text-gray-950">
-              商品详情
-            </h2>
+              <h2 className="px-5 text-lg font-bold text-gray-950">
+                商品详情
+              </h2>
 
-            <div className="mt-5 space-y-2">
-              {detailImages.map(
-                (
-                  image,
-                  index
-                ) => (
-                  <img
-                    key={`${image}-${index}`}
-                    src={image}
-                    alt={`${product.name} ${
-                      index + 1
-                    }`}
-                    className="w-full object-contain"
-                  />
-                )
-              )}
-            </div>
+              <div className="mt-5 space-y-2">
 
-          </section>
-        )}
+                {detailImages.map(
+                  (
+                    image,
+                    index
+                  ) => (
+                    <img
+                      key={`${image}-${index}`}
+                      src={
+                        image
+                      }
+                      alt={`${product.name} ${index + 1
+                        }`}
+                      className="w-full object-contain"
+                    />
+                  )
+                )}
+
+              </div>
+
+            </section>
+          )}
 
         {/* 상품 설명 */}
         {product.description && (
@@ -908,24 +1133,26 @@ export default function ProductDetailPage() {
           </section>
         )}
 
-        {/* 옵션 없는 상품 안내 */}
+        {/* 옵션 없는 상품 */}
         {optionGroups.length ===
           0 && (
-          <section className="mt-3 bg-white px-5 py-6">
+            <section className="mt-3 bg-white px-5 py-6">
 
-            <h2 className="text-lg font-bold text-gray-950">
-              商品选项
-            </h2>
+              <h2 className="text-lg font-bold text-gray-950">
+                商品选项
+              </h2>
 
-            <div className="mt-4 rounded-2xl bg-gray-50 p-4">
-              <p className="text-sm leading-6 text-gray-600">
-                如果该商品有颜色、尺寸或款式等选项，
-                可以在报价申请时填写在补充说明中。
-              </p>
-            </div>
+              <div className="mt-4 rounded-2xl bg-gray-50 p-4">
 
-          </section>
-        )}
+                <p className="text-sm leading-6 text-gray-600">
+                  如果该商品有颜色、尺寸或款式等选项，
+                  可以在报价申请时填写在补充说明中。
+                </p>
+
+              </div>
+
+            </section>
+          )}
 
         {/* 안내 */}
         <section className="mt-3 bg-white px-5 py-6">
@@ -946,9 +1173,11 @@ export default function ProductDetailPage() {
         </section>
 
         <div className="px-5 py-7 text-center">
+
           <p className="text-xs text-gray-400">
             🧪 测试版暂不支持实际付款和购买
           </p>
+
         </div>
 
       </div>
