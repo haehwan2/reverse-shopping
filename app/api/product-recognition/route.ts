@@ -72,6 +72,8 @@ export async function POST(request: Request) {
 - 容量、数量、颜色、尺寸等规格
 - 图片中实际能够看清的文字
 - 适合在韩国购物网站搜索的中文关键词
+- 根据图片中可见的容量、数量、包装形式和商品类型，估算商品总重量
+- 简要说明为什么这样估算重量
 
 如果无法准确判断具体商品，
 请不要强行猜测品牌或商品名称。
@@ -89,10 +91,29 @@ export async function POST(request: Request) {
   "visibleText": [],
   "searchKeywords": [],
   "confidence": 0,
-  "reason": ""
+  "reason": "",
+  "estimatedWeightGrams": 0,
+  "weightReason": ""
 }
 
 confidence 必须是 0 到 100 之间的数字。
+
+estimatedWeightGrams 必须是数字，单位为克。
+
+请尽量给出商品的预估总重量。
+优先根据图片中可见的容量、数量、规格进行计算。
+
+如果图片中没有明确显示重量，
+可以根据商品类别、包装大小和常见零售规格进行合理估算。
+
+除非图片完全无法判断是什么商品，
+否则不要填写 0。
+
+weightReason 中必须说明估算依据。
+
+重量只是AI估算值，
+不要把它描述为实际测量结果。
+
 `.trim(),
             },
           ],

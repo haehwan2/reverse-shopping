@@ -6,6 +6,18 @@ import { useSearchParams, useRouter } from "next/navigation";
 
 type RequestType = "link" | "find";
 
+function estimateShippingFee(weightGrams: number) {
+  if (weightGrams <= 0) return null;
+
+  const weightKg = weightGrams / 1000;
+
+  if (weightKg <= 1) {
+    return 38;
+  }
+
+  return 38 + Math.ceil(weightKg - 1) * 12;
+}
+
 function HomeContent() {
   const [mode, setMode] = useState<RequestType | null>(null);
 
@@ -27,6 +39,60 @@ function HomeContent() {
     useState("");
 
   const [aiLoading, setAiLoading] = useState(false);
+
+  const [linkEstimatedWeight, setLinkEstimatedWeight] =
+    useState<number | null>(null);
+
+  const [linkWeightReason, setLinkWeightReason] =
+    useState("");
+
+  const [linkWeightLoading, setLinkWeightLoading] =
+    useState(false);
+
+  async function estimateLinkWeight() {
+    if (!productUrl.trim()) return;
+
+    try {
+      setLinkWeightLoading(true);
+      setLinkEstimatedWeight(null);
+      setLinkWeightReason("");
+
+      const response = await fetch("/api/weight-estimate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          productName: searchParams.get("productName") || "",
+          productUrl: productUrl,
+          description: requestNote,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to estimate weight");
+      }
+
+      const data = await response.json();
+
+      if (
+        data.success &&
+        data.result?.estimatedWeightGrams > 0
+      ) {
+        setLinkEstimatedWeight(
+          data.result.estimatedWeightGrams
+        );
+
+        setLinkWeightReason(
+          data.result.weightReason || ""
+        );
+      }
+    } catch (error) {
+      console.error("Link weight estimate error:", error);
+    } finally {
+      setLinkWeightLoading(false);
+    }
+  }
 
   async function handleAiRecognition() {
     if (!selectedFile) {
@@ -103,6 +169,8 @@ function HomeContent() {
     searchKeywords: string[];
     confidence: number;
     reason: string;
+    estimatedWeightGrams: number;
+    weightReason: string;
   } | null>(null);
 
   const [searchLoading, setSearchLoading] = useState(false);
@@ -180,6 +248,9 @@ function HomeContent() {
     const productImage =
       searchParams.get("productImage");
 
+    const productOption =
+      searchParams.get("productOption");
+
     if (requestedMode === "link") {
       setMode("link");
 
@@ -188,12 +259,21 @@ function HomeContent() {
       }
 
       if (productName) {
-        setRecommendedProductName(productName);
-        setRequestNote("");
+        setRecommendedProductName(
+          productName
+        );
       }
 
       if (productImage) {
         setPreview(productImage);
+      }
+
+      if (productOption) {
+        setRequestNote(
+          `商品选项：${productOption}`
+        );
+      } else if (productName) {
+        setRequestNote("");
       }
     } else if (
       requestedMode === "find"
@@ -456,6 +536,31 @@ function HomeContent() {
                 </div>
               </button>
 
+              {/* 상품 찾기 */}
+              <button
+                type="button"
+                onClick={() =>
+                  openMode("find")
+                }
+                className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition active:scale-[0.99]"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-lg font-bold text-gray-950">
+                      📷 用图片找韩国商品
+                    </div>
+
+                    <p className="mt-1.5 text-sm leading-5 text-gray-500">
+                      上传商品图片，帮你识别并寻找韩国商品
+                    </p>
+                  </div>
+
+                  <span className="ml-3 text-xl text-gray-400">
+                    ›
+                  </span>
+                </div>
+              </button>
+
               {/* 링크 구매 */}
               <button
                 type="button"
@@ -481,79 +586,6 @@ function HomeContent() {
                 </div>
               </button>
 
-              {/* 상품 찾기 */}
-              <button
-                type="button"
-                onClick={() =>
-                  openMode("find")
-                }
-                className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition active:scale-[0.99]"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-lg font-bold text-gray-950">
-                      📷 找不到商品？
-                    </div>
-
-                    <p className="mt-1.5 text-sm leading-5 text-gray-500">
-                      上传图片和说明，我们帮你人工寻找
-                    </p>
-                  </div>
-
-                  <span className="ml-3 text-xl text-gray-400">
-                    ›
-                  </span>
-                </div>
-              </button>
-            </section>
-
-            {/* Process */}
-            <section className="mt-8 rounded-2xl bg-gray-50 p-5">
-              <p className="text-sm font-semibold text-gray-900">
-                简单三步
-              </p>
-
-              <div className="mt-4 flex items-center justify-between text-center">
-
-                <div className="flex-1">
-                  <div className="text-xl">
-                    🔍
-                  </div>
-
-                  <p className="mt-2 text-xs font-medium text-gray-700">
-                    提交商品
-                  </p>
-                </div>
-
-                <div className="text-gray-300">
-                  →
-                </div>
-
-                <div className="flex-1">
-                  <div className="text-xl">
-                    💰
-                  </div>
-
-                  <p className="mt-2 text-xs font-medium text-gray-700">
-                    查看报价
-                  </p>
-                </div>
-
-                <div className="text-gray-300">
-                  →
-                </div>
-
-                <div className="flex-1">
-                  <div className="text-xl">
-                    💬
-                  </div>
-
-                  <p className="mt-2 text-xs font-medium text-gray-700">
-                    1对1沟通
-                  </p>
-                </div>
-
-              </div>
             </section>
 
             <p className="mt-6 text-center text-xs leading-5 text-gray-400">
@@ -596,230 +628,286 @@ function HomeContent() {
             </div>
 
             {/* Image */}
-            <div className="mt-7">
-              <label className="text-sm font-semibold text-gray-800">
-                商品图片
+            {(mode === "find" || preview) && (
+              <div className="mt-7">
+                <label className="text-sm font-semibold text-gray-800">
+                  商品图片
 
-                {mode === "find" && (
-                  <span className="ml-1 text-red-500">
-                    *
-                  </span>
-                )}
+                  {mode === "find" && (
+                    <span className="ml-1 text-red-500">
+                      *
+                    </span>
+                  )}
 
-                {mode === "link" && (
-                  <span className="ml-2 font-normal text-gray-400">
-                    选填
-                  </span>
-                )}
-              </label>
+                  {mode === "link" && (
+                    <span className="ml-2 font-normal text-gray-400">
+                      选填
+                    </span>
+                  )}
+                </label>
 
-              {preview ? (
-                <div className="mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                {preview ? (
+                  <div className="mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-3">
 
-                  <img
-                    src={preview}
-                    alt="商品预览"
-                    className="max-h-64 w-full rounded-xl object-contain"
-                  />
+                    <img
+                      src={preview}
+                      alt="商品预览"
+                      className="max-h-64 w-full rounded-xl object-contain"
+                    />
 
-                  {/* 사용자가 직접 올린 이미지만 삭제 가능 */}
-                  {selectedFile && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFile(
-                          null
-                        );
-
-                        if (
-                          preview.startsWith(
-                            "blob:"
-                          )
-                        ) {
-                          URL.revokeObjectURL(
-                            preview
+                    {/* 사용자가 직접 올린 이미지만 삭제 가능 */}
+                    {selectedFile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFile(
+                            null
                           );
-                        }
 
-                        setPreview("");
-                      }}
-                      className="mt-3 text-sm font-medium text-red-500"
-                    >
-                      删除图片
+                          if (
+                            preview.startsWith(
+                              "blob:"
+                            )
+                          ) {
+                            URL.revokeObjectURL(
+                              preview
+                            );
+                          }
 
-                    </button>
-                  )}
+                          setPreview("");
+                        }}
+                        className="mt-3 text-sm font-medium text-red-500"
+                      >
+                        删除图片
 
-                  {mode === "find" && selectedFile && (
-                    <button
-                      type="button"
-                      onClick={handleAiRecognition}
-                      disabled={aiLoading}
-                      className="mt-3 w-full rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.99] disabled:opacity-50"
-                    >
-                      {aiLoading
-                        ? "AI正在识别..."
-                        : "✨ AI识别商品"}
-                    </button>
-                  )}
+                      </button>
+                    )}
 
-                  {aiResult && (
-                    <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-bold text-gray-950">
-                          ✨ AI识别结果
-                        </div>
+                    {mode === "find" && selectedFile && (
+                      <button
+                        type="button"
+                        onClick={handleAiRecognition}
+                        disabled={aiLoading}
+                        className="mt-3 w-full rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.99] disabled:opacity-50"
+                      >
+                        {aiLoading
+                          ? "AI正在识别..."
+                          : "✨ AI识别商品"}
+                      </button>
+                    )}
 
-                        <div className="text-xs font-medium text-orange-600">
-                          可信度 {aiResult.confidence}%
-                        </div>
-                      </div>
+                    {aiResult && (
+                      <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-bold text-gray-950">
+                            ✨ AI识别结果
+                          </div>
 
-                      <div className="mt-3 space-y-2 text-sm text-gray-700">
-                        {aiResult.brand && (
-                          <p>
-                            <span className="font-semibold text-gray-900">
-                              品牌：
-                            </span>
-                            {aiResult.brand}
-                          </p >
-                        )}
-
-                        {aiResult.productName && (
-                          <p>
-                            <span className="font-semibold text-gray-900">
-                              商品名：
-                            </span>
-                            {aiResult.productName}
-                          </p >
-                        )}
-
-                        {aiResult.category && (
-                          <p>
-                            <span className="font-semibold text-gray-900">
-                              类别：
-                            </span>
-                            {aiResult.category}
-                          </p >
-                        )}
-
-                        {aiResult.variant && (
-                          <p>
-                            <span className="font-semibold text-gray-900">
-                              特征：
-                            </span>
-                            {aiResult.variant}
-                          </p >
-                        )}
-                      </div>
-
-                      {aiResult.searchKeywords?.length > 0 && (
-                        <div className="mt-4">
-                          <p className="text-xs font-semibold text-gray-700">
-                            推荐搜索词
-                          </p >
-
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {aiResult.searchKeywords.map((keyword) => (
-                              <span
-                                key={keyword}
-                                className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
-                              >
-                                {keyword}
-                              </span>
-                            ))}
+                          <div className="text-xs font-medium text-orange-600">
+                            可信度 {aiResult.confidence}%
                           </div>
                         </div>
-                      )}
 
-                      {aiResult.searchKeywords?.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleProductSearch}
-                          disabled={searchLoading}
-                          className="mt-4 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.99] disabled:opacity-50"
-                        >
-                          {searchLoading
-                            ? "AI正在搜索韩国商品..."
-                            : "🔍 AI搜索韩国商品"}
-                        </button>
-                      )}
+                        <div className="mt-3 space-y-2 text-sm text-gray-700">
+                          {aiResult.brand && (
+                            <p>
+                              <span className="font-semibold text-gray-900">
+                                品牌：
+                              </span>
+                              {aiResult.brand}
+                            </p >
+                          )}
 
-                      {searchResult && (
-                        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-                          <p className="text-sm font-bold text-gray-950">
-                            🔍 AI搜索结果
-                          </p >
+                          {aiResult.productName && (
+                            <p>
+                              <span className="font-semibold text-gray-900">
+                                商品名：
+                              </span>
+                              {aiResult.productName}
+                            </p >
+                          )}
 
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">
-                            {searchResult}
-                          </p >
+                          {aiResult.category && (
+                            <p>
+                              <span className="font-semibold text-gray-900">
+                                类别：
+                              </span>
+                              {aiResult.category}
+                            </p >
+                          )}
+
+                          {aiResult.variant && (
+                            <p>
+                              <span className="font-semibold text-gray-900">
+                                特征：
+                              </span>
+                              {aiResult.variant}
+                            </p >
+                          )}
                         </div>
-                      )}
 
-                      {searchProducts.length > 0 && (
-                        <div className="mt-3 space-y-3">
-                          {searchProducts.map((product, index) => (
-                            <div
-                              key={`${product.url}-${index}`}
-                              className="rounded-xl border border-gray-200 bg-white p-4"
-                            >
-                              <p className="text-sm font-bold leading-6 text-gray-950">
-                                {product.title || `韩国商品 ${index + 1}`}
+                        {aiResult.estimatedWeightGrams > 0 && (
+                          <div className="mt-3 rounded-xl bg-white p-3">
+                            <p className="text-sm">
+                              <span className="font-semibold text-gray-900">
+                                ⚖️ AI预估重量：
+                              </span>
+
+                              {aiResult.estimatedWeightGrams >= 1000
+                                ? `约 ${(aiResult.estimatedWeightGrams / 1000).toFixed(1)}kg`
+                                : `约 ${aiResult.estimatedWeightGrams}g`}
+                            </p >
+
+                            {aiResult.weightReason && (
+                              <p className="mt-1 text-xs leading-5 text-gray-500">
+                                {aiResult.weightReason}
                               </p >
+                            )}
 
-                              <a
-                                href="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-4 flex w-full items-center justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
-                              >
-                                查看商品 →
-                              </a >
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              仅为AI估算，实际重量可能不同
+                            </p >
+
+                            {aiResult.estimatedWeightGrams > 0 && (
+                              <div className="mt-3 border-t border-gray-200 pt-3">
+                                <p className="text-sm text-gray-900">
+                                  <span className="font-semibold">
+                                    🚚 预计国际运费：
+                                  </span>
+                                  约 ¥{estimateShippingFee(aiResult.estimatedWeightGrams)}
+                                </p >
+
+                                <p className="mt-1 text-[11px] text-gray-400">
+                                  按参考运费规则估算 · 实际运费以物流确认结果为准
+                                </p >
+                              </div>
+                            )}
+
+                            {linkEstimatedWeight !== null && (
+                              <div className="mt-3 border-t border-gray-200 pt-3">
+                                <p className="text-sm text-gray-900">
+                                  <span className="font-semibold">
+                                    🚚 预计国际运费：
+                                  </span>
+                                  约 ¥{estimateShippingFee(linkEstimatedWeight)}
+                                </p >
+
+                                <p className="mt-1 text-[11px] text-gray-400">
+                                  按参考运费规则估算 · 实际运费以物流确认结果为准
+                                </p >
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {aiResult.searchKeywords?.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-xs font-semibold text-gray-700">
+                              推荐搜索词
+                            </p >
+
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {aiResult.searchKeywords.map((keyword) => (
+                                <span
+                                  key={keyword}
+                                  className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                                >
+                                  {keyword}
+                                </span>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          </div>
+                        )}
 
-                      {searchResult && searchProducts.length === 0 && (
-                        <div className="mt-3 rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-500">
-                          暂时没有找到可以确认的商品链接。
-                          <br />
-                          可以根据上面的识别结果提交查询。
-                        </div>
-                      )}
+                        {aiResult.searchKeywords?.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleProductSearch}
+                            disabled={searchLoading}
+                            className="mt-4 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.99] disabled:opacity-50"
+                          >
+                            {searchLoading
+                              ? "AI正在搜索韩国商品..."
+                              : "🔍 AI搜索韩国商品"}
+                          </button>
+                        )}
 
-                      <p className="mt-4 text-xs leading-5 text-gray-500">
-                        {aiResult.reason}
-                      </p >
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <label className="mt-2 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-5 py-6 transition active:bg-gray-100">
+                        {searchResult && (
+                          <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+                            <p className="text-sm font-bold text-gray-950">
+                              🔍 AI搜索结果
+                            </p >
 
-                  <span className="text-2xl">
-                    📷
-                  </span>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                              {searchResult}
+                            </p >
+                          </div>
+                        )}
 
-                  <span className="mt-2 text-sm font-medium text-gray-700">
-                    点击上传商品图片
-                  </span>
+                        {searchProducts.length > 0 && (
+                          <div className="mt-3 space-y-3">
+                            {searchProducts.map((product, index) => (
+                              <div
+                                key={`${product.url}-${index}`}
+                                className="rounded-xl border border-gray-200 bg-white p-4"
+                              >
+                                <p className="text-sm font-bold leading-6 text-gray-950">
+                                  {product.title || `韩国商品 ${index + 1}`}
+                                </p >
 
-                  <span className="mt-1 text-xs text-gray-400">
-                    可从手机相册选择
-                  </span>
+                                <a
+                                  href="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-4 flex w-full items-center justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
+                                >
+                                  查看商品 →
+                                </a >
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={
-                      handleFileChange
-                    }
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
+                        {searchResult && searchProducts.length === 0 && (
+                          <div className="mt-3 rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-500">
+                            暂时没有找到可以确认的商品链接。
+                            <br />
+                            可以根据上面的识别结果提交查询。
+                          </div>
+                        )}
+
+                        <p className="mt-4 text-xs leading-5 text-gray-500">
+                          {aiResult.reason}
+                        </p >
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <label className="mt-2 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-5 py-6 transition active:bg-gray-100">
+
+                    <span className="text-2xl">
+                      📷
+                    </span>
+
+                    <span className="mt-2 text-sm font-medium text-gray-700">
+                      点击上传商品图片
+                    </span>
+
+                    <span className="mt-1 text-xs text-gray-400">
+                      可从手机相册选择
+                    </span>
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={
+                        handleFileChange
+                      }
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
 
             {/* URL */}
             {mode === "link" && (
@@ -843,6 +931,41 @@ function HomeContent() {
                   placeholder="https://..."
                   className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-[15px] text-gray-900 outline-none transition focus:border-gray-400 focus:bg-white"
                 />
+
+                <button
+                  type="button"
+                  onClick={estimateLinkWeight}
+                  disabled={!productUrl.trim() || linkWeightLoading}
+                  className="mt-3 w-full rounded-xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {linkWeightLoading
+                    ? "AI正在预估重量..."
+                    : "⚖️ AI预估商品重量"}
+                </button>
+
+                {linkEstimatedWeight !== null && linkEstimatedWeight > 0 && (
+                  <div className="mt-3 rounded-xl bg-gray-50 p-4">
+                    <p className="text-sm text-gray-900">
+                      <span className="font-semibold">
+                        ⚖️ AI预估重量：
+                      </span>
+
+                      {linkEstimatedWeight >= 1000
+                        ? `约 ${(linkEstimatedWeight / 1000).toFixed(1)}kg`
+                        : `约 ${linkEstimatedWeight}g`}
+                    </p >
+
+                    {linkWeightReason && (
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {linkWeightReason}
+                      </p >
+                    )}
+
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      仅为AI估算，实际重量可能不同
+                    </p >
+                  </div>
+                )}
               </div>
             )}
 
@@ -872,7 +995,7 @@ function HomeContent() {
                       ? "请尽量详细填写品牌、颜色、尺寸、用途等信息"
                       : "如有颜色、尺寸、款式等要求，请在这里填写"
                 }
-                rows={4}
+                rows={3}
                 className="mt-2 w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-[15px] text-gray-900 outline-none transition focus:border-gray-400 focus:bg-white"
               />
             </div>

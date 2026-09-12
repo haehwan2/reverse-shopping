@@ -84,6 +84,7 @@ export async function POST(
       price_krw,
       description,
       sort_order,
+      options,
     } = body;
 
     if (!name || !name.trim()) {
@@ -127,6 +128,9 @@ export async function POST(
 
           description:
             description || null,
+
+          options:
+            Array.isArray(options) ? options : [],
 
           is_active: true,
 
@@ -252,6 +256,13 @@ export async function PATCH(
           body.description.trim()
           ? body.description.trim()
           : null;
+    }
+
+    if ("options" in body) {
+      updates.options =
+        Array.isArray(body.options)
+          ? body.options
+          : [];
     }
 
     if ("sort_order" in body) {

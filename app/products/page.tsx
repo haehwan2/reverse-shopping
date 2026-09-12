@@ -20,6 +20,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadProducts() {
@@ -42,6 +43,26 @@ export default function ProductsPage() {
     }
 
     loadProducts();
+  }, []);
+
+  useEffect(() => {
+    async function loadExchangeRate() {
+      try {
+        const response = await fetch("/api/exchange-rate");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch exchange rate");
+        }
+
+        const data = await response.json();
+
+        setExchangeRate(data.rate);
+      } catch (error) {
+        console.error("Exchange rate load error:", error);
+      }
+    }
+
+    loadExchangeRate();
   }, []);
 
   function selectProduct(product: Product) {
@@ -176,13 +197,22 @@ export default function ProductsPage() {
 
                   {product.price_krw !== null && (
                     <div className="mt-2">
-                      <p className="text-base font-bold tracking-tight text-gray-950">
-                        ₩{product.price_krw.toLocaleString()}
+                      {exchangeRate !== null && (
+                        <p className="text-base font-bold tracking-tight text-gray-950">
+                          约 ¥
+                          {Math.round(product.price_krw * exchangeRate).toLocaleString()}
+                        </p >
+                      )}
+
+                      <p className="mt-0.5 text-[11px] text-gray-500">
+                        ₩{product.price_krw.toLocaleString()} 韩国售价
                       </p >
 
-                      <p className="mt-0.5 text-[10px] text-gray-400">
-                        韩国售价
-                      </p >
+                      {exchangeRate !== null && (
+                        <p className="mt-0.5 text-[10px] text-gray-400">
+                          按当前汇率估算
+                        </p >
+                      )}
                     </div>
                   )}
 
