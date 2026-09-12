@@ -251,6 +251,9 @@ function HomeContent() {
     const productOption =
       searchParams.get("productOption");
 
+    const requestedQuantity =
+      searchParams.get("quantity");
+
     if (requestedMode === "link") {
       setMode("link");
 
@@ -275,12 +278,42 @@ function HomeContent() {
       } else if (productName) {
         setRequestNote("");
       }
+
+      if (requestedQuantity) {
+        const parsedQuantity = 
+          Number(requestedQuantity);
+
+        if (
+          Number.isFinite(parsedQuantity) &&
+          parsedQuantity >= 1 &&
+          parsedQuantity <= 20
+        ) {
+          setQuantity(parsedQuantity);
+        }
+      }
     } else if (
       requestedMode === "find"
     ) {
       setMode("find");
     } else {
       setMode(null);
+    }
+
+    if (requestedQuantity) {
+      const parsedQuantity =
+        Number(requestedQuantity);
+
+      if (
+        Number.isFinite(
+          parsedQuantity
+        ) &&
+        parsedQuantity >= 1 &&
+        parsedQuantity <= 20
+      ) {
+        setQuantity(
+          parsedQuantity
+        );
+      }
     }
   }, [searchParams]);
 

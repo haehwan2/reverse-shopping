@@ -26,6 +26,32 @@ type Message = {
   created_at: string;
 };
 
+type ChatConversation = {
+  requestId: number;
+  requestNote:
+  | string
+  | null;
+  quantity: number;
+  status: string;
+
+  requestCreatedAt:
+  string;
+
+  latestMessage: {
+    id: number;
+
+    sender:
+    | "user"
+    | "admin";
+
+    message: string;
+
+    createdAt: string;
+  } | null;
+
+  unreadCount: number;
+};
+
 function getExternalUrl(url: string) {
   const trimmed = url.trim();
 
@@ -57,6 +83,55 @@ export default function AdminDashboard() {
 
   const [openChatId, setOpenChatId] = useState<number | null>(null);
 
+  const [
+    conversations,
+    setConversations,
+  ] = useState<
+    ChatConversation[]
+  >([]);
+
+  const [
+    totalUnread,
+    setTotalUnread,
+  ] = useState(0);
+
+  async function loadChats() {
+    try {
+      const response =
+        await fetch(
+          "/api/admin/chats",
+          {
+            method: "GET",
+            credentials:
+              "include",
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        console.error(
+          data
+        );
+
+        return;
+      }
+
+      setConversations(
+        data.conversations ??
+        []
+      );
+
+      setTotalUnread(
+        data.totalUnread ??
+        0
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
   async function loadRequests() {
     setLoading(true);
 
@@ -85,6 +160,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadRequests();
+    loadChats();
   }, []);
 
   function updateField(
@@ -102,9 +178,9 @@ export default function AdminDashboard() {
       current.map((request) =>
         request.id === id
           ? {
-              ...request,
-              [field]: numberValue,
-            }
+            ...request,
+            [field]: numberValue,
+          }
           : request
       )
     );
@@ -198,8 +274,66 @@ export default function AdminDashboard() {
         ...current,
         [requestId]: data.messages ?? [],
       }));
+      await loadChats();
     } catch (error) {
       console.error(error);
+    }
+  }
+
+  async function markChatUnread(
+    requestId: number
+  ) {
+    try {
+      const response =
+        await fetch(
+          `/api/admin/quotes/${requestId}/messages`,
+          {
+            method:
+              "PATCH",
+
+            credentials:
+              "include",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                {
+                  unread: true,
+                }
+              ),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        console.error(
+          data
+        );
+
+        alert(
+          "안 읽음 처리에 실패했습니다."
+        );
+
+        return;
+      }
+
+      await loadChats();
+
+      setOpenChatId(
+        null
+      );
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        "안 읽음 처리에 실패했습니다."
+      );
     }
   }
 
@@ -300,6 +434,112 @@ export default function AdminDashboard() {
           </Link>
         </div>
 
+        {/* 채팅함 */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900">
+              💬 고객 채팅
+            </h2>
+
+            {totalUnread > 0 && (
+              <span className="rounded-full bg-red-500 px-3 py-1 text-sm font-bold text-white">
+                안 읽음{" "}
+                {totalUnread}
+              </span>
+            )}
+          </div>
+
+          {conversations.length ===
+            0 ? (
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-6 text-center">
+              <p className="text-sm text-gray-500">
+                아직 채팅이 없습니다.
+              </p >
+            </div>
+          ) : (
+            <div className="mt-5 space-y-3">
+              {conversations.map(
+                (
+                  conversation
+                ) => (
+                  <button
+                    key={
+                      conversation.requestId
+                    }
+                    type="button"
+                    onClick={() => {
+                      setOpenChatId(
+                        conversation.requestId
+                      );
+
+                      loadMessages(
+                        conversation.requestId
+                      );
+
+                      setTimeout(
+                        () => {
+                          document
+                            .getElementById(
+                              `request-${conversation.requestId}`
+                            )
+                            ?.scrollIntoView(
+                              {
+                                behavior:
+                                  "smooth",
+
+                                block:
+                                  "start",
+                              }
+                            );
+                        },
+                        100
+                      );
+                    }}
+                    className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:border-gray-400"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900">
+                          요청 #
+                          {
+                            conversation.requestId
+                          }
+                        </p >
+
+                        <p className="mt-1 truncate text-sm text-gray-600">
+                          {conversation
+                            .latestMessage
+                            ?.message ||
+                            "메시지 없음"}
+                        </p >
+
+                        {conversation.latestMessage && (
+                          <p className="mt-2 text-xs text-gray-400">
+                            {new Date(
+                              conversation.latestMessage.createdAt
+                            ).toLocaleString(
+                              "ko-KR"
+                            )}
+                          </p >
+                        )}
+                      </div>
+
+                      {conversation.unreadCount >
+                        0 && (
+                          <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white">
+                            {
+                              conversation.unreadCount
+                            }
+                          </span>
+                        )}
+                    </div>
+                  </button>
+                )
+              )}
+            </div>
+          )}
+        </div>
+
         {/* 요청 제목 */}
         <div className="mt-10 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900">
@@ -330,6 +570,7 @@ export default function AdminDashboard() {
 
               return (
                 <div
+                  id={`request-${request.id}`}
                   key={request.id}
                   className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6"
                 >
@@ -415,9 +656,9 @@ export default function AdminDashboard() {
                           current.map((item) =>
                             item.id === request.id
                               ? {
-                                  ...item,
-                                  status: e.target.value,
-                                }
+                                ...item,
+                                status: e.target.value,
+                              }
                               : item
                           )
                         );
@@ -465,13 +706,31 @@ export default function AdminDashboard() {
                           </p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => loadMessages(request.id)}
-                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold"
-                        >
-                          새로고침
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              markChatUnread(
+                                request.id
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold"
+                          >
+                            안 읽음으로 표시
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              loadMessages(
+                                request.id
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold"
+                          >
+                            새로고침
+                          </button>
+                        </div>
                       </div>
 
                       <div className="mt-4 max-h-80 space-y-3 overflow-y-auto rounded-xl bg-white p-3">
@@ -483,27 +742,24 @@ export default function AdminDashboard() {
                           messages.map((item) => (
                             <div
                               key={item.id}
-                              className={`flex ${
-                                item.sender === "admin"
-                                  ? "justify-end"
-                                  : "justify-start"
-                              }`}
+                              className={`flex ${item.sender === "admin"
+                                ? "justify-end"
+                                : "justify-start"
+                                }`}
                             >
                               <div
-                                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                                  item.sender === "admin"
-                                    ? "bg-black text-white"
-                                    : "bg-gray-100 text-gray-900"
-                                }`}
+                                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${item.sender === "admin"
+                                  ? "bg-black text-white"
+                                  : "bg-gray-100 text-gray-900"
+                                  }`}
                               >
                                 <p>{item.message}</p>
 
                                 <p
-                                  className={`mt-1 text-[10px] ${
-                                    item.sender === "admin"
-                                      ? "text-gray-300"
-                                      : "text-gray-400"
-                                  }`}
+                                  className={`mt-1 text-[10px] ${item.sender === "admin"
+                                    ? "text-gray-300"
+                                    : "text-gray-400"
+                                    }`}
                                 >
                                   {item.sender === "admin"
                                     ? "관리자"
