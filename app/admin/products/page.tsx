@@ -1253,7 +1253,7 @@ export default function AdminProductsPage() {
         {/* 관리자 헤더 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            K-Bridge 관리자
+            CK-Bridge 관리자
           </h1>
 
           <p className="mt-2 text-sm text-gray-500">
