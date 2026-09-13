@@ -64,6 +64,8 @@ export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
 
+  const [submitting, setSubmitting] = useState(false);
+
   const id =
     params.id as string;
 
@@ -659,80 +661,35 @@ export default function ProductDetailPage() {
   // 견적 요청
   // =========================
 
-  function requestQuote() {
+  async function requestQuote() {
     if (!product) {
       return;
     }
 
     if (
-      optionGroups.length >
-      0 &&
-      totalOptionQuantity ===
-      0
+      optionGroups.length > 0 &&
+      totalOptionQuantity === 0
     ) {
-      alert(
-        "请至少选择一个商品选项"
-      );
-
+      alert("请至少选择一个商品选项");
       return;
     }
 
-    const query =
-      new URLSearchParams(
-        {
-          mode:
-            "link",
+    try {
+      setSubmitting(true);
 
-          productName:
-            product.name,
-        }
-      );
-
-    if (
-      product.product_url
-    ) {
-      query.set(
-        "productUrl",
-        product.product_url
-      );
-    }
-
-    if (
-      product.image_url
-    ) {
-      query.set(
-        "productImage",
-        product.image_url
-      );
-    }
-
-    if (
-      optionGroups.length >
-      0
-    ) {
-      const selectedItems:
-        string[] = [];
+      const selectedItems: string[] = [];
 
       optionGroups.forEach(
-        (
-          group,
-          groupIndex
-        ) => {
+        (group, groupIndex) => {
           group.values.forEach(
-            (
-              value,
-              valueIndex
-            ) => {
+            (value, valueIndex) => {
               const quantity =
                 getOptionQuantity(
                   groupIndex,
                   valueIndex
                 );
 
-              if (
-                quantity >
-                0
-              ) {
+              if (quantity > 0) {
                 selectedItems.push(
                   `${group.name}: ${value} × ${quantity}`
                 );
@@ -742,24 +699,63 @@ export default function ProductDetailPage() {
         }
       );
 
-      query.set(
-        "productOption",
-        selectedItems.join(
-          "\n"
-        )
+      const requestNoteParts: string[] = [];
+
+      requestNoteParts.push(
+        `推荐商品：${product.name}`
       );
 
-      query.set(
-        "quantity",
-        String(
-          totalOptionQuantity
-        )
+      if (selectedItems.length > 0) {
+        requestNoteParts.push(
+          `商品选项：\n${selectedItems.join("\n")}`
+        );
+      }
+
+      const publicToken =
+        crypto.randomUUID();
+
+      const { error } =
+        await supabase
+          .from("quote_requests")
+          .insert({
+            request_type: "link",
+
+            image_url:
+              product.image_url || null,
+
+            product_url:
+              product.product_url || null,
+
+            request_note:
+              requestNoteParts.join("\n\n"),
+
+            quantity:
+              totalOptionQuantity > 0
+                ? totalOptionQuantity
+                : 1,
+
+            status: "pending",
+
+            public_token:
+              publicToken,
+          });
+
+      if (error) {
+        throw error;
+      }
+
+      router.push(
+        `/request/${publicToken}`
       );
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        "提交失败，请稍后再试。"
+      );
+    } finally {
+      setSubmitting(false);
     }
-
-    router.push(
-      `/?${query.toString()}`
-    );
   }
 
   return (
@@ -1189,12 +1185,13 @@ export default function ProductDetailPage() {
 
           <button
             type="button"
-            onClick={
-              requestQuote
-            }
-            className="w-full rounded-2xl bg-black px-4 py-4 text-base font-bold text-white"
+            onClick={requestQuote}
+            disabled={submitting}
+            className="w-full rounded-2xl bg-black px-4 py-4 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            申请报价
+            {submitting
+              ? "正在提交..."
+              : "申请报价"}
           </button>
 
         </div>
