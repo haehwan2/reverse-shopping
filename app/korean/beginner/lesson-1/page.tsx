@@ -80,7 +80,7 @@ export default function Lesson1Page() {
             <WordRow korean="건강" hanja="健康" chinese="健康" />
             <WordRow
               korean="우산"
-              hanja="雨傘"
+              hanja="雨伞"
               chinese="伞"
               last
             />
@@ -440,7 +440,7 @@ export default function Lesson1Page() {
 
             <WordRow
               korean="해산물"
-              hanja="海産物"
+              hanja="海产物"
               chinese="海产品"
             />
 
@@ -595,7 +595,7 @@ export default function Lesson1Page() {
         ================================= */}
         <LessonSection
           number="08"
-          title="우산（雨傘）"
+          title="우산（雨伞）"
           meaning="伞"
           pronunciation="우산"
         >
@@ -605,15 +605,15 @@ export default function Lesson1Page() {
 
           <p>
             但是韩语里说：
-            <Strong> 우산（雨傘）</Strong>
+            <Strong> 우산（雨伞）</Strong>
           </p>
 
           <HanjaBox
             items={[
               ["雨", "우"],
-              ["傘", "산"],
+              ["伞", "산"],
             ]}
-            result="雨傘 → 우산"
+            result="雨伞 → 우산"
           />
 
           <Example
