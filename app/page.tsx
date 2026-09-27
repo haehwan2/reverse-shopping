@@ -280,7 +280,7 @@ function HomeContent() {
       }
 
       if (requestedQuantity) {
-        const parsedQuantity = 
+        const parsedQuantity =
           Number(requestedQuantity);
 
         if (
@@ -618,7 +618,6 @@ function HomeContent() {
                   </span>
                 </div>
               </button>
-
             </section>
 
             <p className="mt-6 text-center text-xs leading-5 text-gray-400">
@@ -1107,6 +1106,31 @@ function HomeContent() {
           </section>
         )}
       </div>
+
+      {/* 친구용 한국어 공부 */}
+      <button
+        type="button"
+        onClick={() => router.push("/korean")}
+        style={{
+          position: "fixed",
+          right: "20px",
+          bottom: "20px",
+          width: "56px",
+          height: "56px",
+          borderRadius: "50%",
+          backgroundColor: "black",
+          color: "white",
+          fontSize: "24px",
+          zIndex: 99999,
+          border: "none",
+          cursor: "pointer",
+          boxShadow: "0 4px 15px rgba(0,0,0,0.25)",
+        }}
+      >
+        🇰🇷
+      </button>
+
+
     </main>
   );
 }
