@@ -69,7 +69,7 @@ export default function Lesson2Page() {
                         <WordRow korean="빌리다" chinese="借（借进来）" />
                         <WordRow korean="정말" chinese="真的 / 真" />
                         <WordRow korean="대하다" chinese="对待 / 面对" />
-                        <WordRow korean="지하철" hanja="地下鐵" chinese="地铁" />
+                        <WordRow korean="지하철" hanja="地下铁" chinese="地铁" />
                         <WordRow korean="팔다" chinese="卖" />
                         <WordRow korean="책상" hanja="冊床" chinese="书桌" />
                         <WordRow korean="장소" hanja="场所" chinese="场所 / 地点" />
@@ -397,9 +397,9 @@ export default function Lesson2Page() {
                         items={[
                             ["地", "지"],
                             ["下", "하"],
-                            ["鐵", "철"],
+                            ["铁", "철"],
                         ]}
-                        result="地下鐵 → 지하철"
+                        result="地下铁 → 지하철"
                     />
 
                     <p>
@@ -821,7 +821,7 @@ export default function Lesson2Page() {
 
                     <div className="mt-5 space-y-3">
                         <ReviewRow korean="고향" hanja="故鄕" chinese="故乡 / 家乡" />
-                        <ReviewRow korean="지하철" hanja="地下鐵" chinese="地铁" />
+                        <ReviewRow korean="지하철" hanja="地下铁" chinese="地铁" />
                         <ReviewRow korean="장소" hanja="场所" chinese="场所 / 地点" />
                         <ReviewRow korean="생활" hanja="生活" chinese="生活" />
                     </div>
