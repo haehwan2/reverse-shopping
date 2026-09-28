@@ -301,7 +301,7 @@ export default function Lesson3Page() {
                         现代中文一般说
                         <Strong>“介绍”</Strong>，
                         而韩语的“소개”来自
-                        <Strong> 紹介</Strong>。
+                        <Strong> 绍介</Strong>。
                     </p>
 
                     <Example
