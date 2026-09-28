@@ -22,11 +22,20 @@ const lessons = [
   {
     id: "lesson-2",
     number: "第2课",
-    title: "生活中常用的韩语单词",
+    title: "生活中常用的韩语单词1",
     description: "学习15个常用单词，并继续利用中文理解韩语汉字词",
     tags: ["고향", "지하철", "생활", "괜찮다"],
     path: "/korean/beginner/lesson-2",
   },
+  {
+    id: "lesson-3",
+    number: "第3课",
+    title: "生活中常用的韩语单词 2",
+    description: "学习15个常用单词，了解韩语和中文汉字词的有趣差异",
+    tags: ["계획", "취미", "근처", "아직"],
+    path: "/korean/beginner/lesson-3",
+  },
+
 ];
 
 export default function BeginnerPage() {
